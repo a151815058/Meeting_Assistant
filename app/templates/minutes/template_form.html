@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ '編輯範本' if template else '新增範本' }} - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; margin-bottom: .3rem; }
+  .field input, .field textarea { width: 100%; }
+  .field textarea { min-height: 360px; font-family: ui-monospace, Consolas, "Microsoft JhengHei", monospace; line-height: 1.5; }
+  .vars { font-size: .9rem; }
+  .vars code { background: rgba(255, 255, 255, .1); padding: .05rem .3rem; border-radius: 4px; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>{{ '編輯範本' if template else '新增範本' }}</h1>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+      <label for="name">名稱</label>
+      <input id="name" type="text" name="name" value="{{ form.name }}" required maxlength="255">
+    </div>
+    <div class="field">
+      <label for="description">說明（選填）</label>
+      <input id="description" type="text" name="description" value="{{ form.description }}" maxlength="1000">
+    </div>
+    <div class="field">
+      <label for="body">範本內容（Markdown）</label>
+      <textarea id="body" name="body" required maxlength="20000">{{ form.body }}</textarea>
+    </div>
+    <div class="vars">
+      <p>撰寫方式：用 Markdown 寫出會議記錄的標題與段落，括號內可寫給 AI 的撰寫說明（例如「（條列三點）」），AI 會依逐字稿填入內容。可使用以下變數：</p>
+      <ul>
+        {% for name, desc in variables.items() %}
+          <li><code>{{ '{{ ' ~ name ~ ' }}' }}</code> {{ desc }}</li>
+        {% endfor %}
+      </ul>
+      <p>範本在安全沙箱中套用，僅支援變數與簡單的 <code>{% raw %}{% if %}{% endraw %}</code>／<code>{% raw %}{% for %}{% endraw %}</code>。</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn" type="submit">儲存</button>
+      <a href="{{ url_for('minutes.template_list') }}">取消</a>
+    </div>
+  </form>
+{% endblock %}

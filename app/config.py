@@ -1,0 +1,140 @@
+import os
+
+
+class BaseConfig:
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "DATABASE_URL",
+        "postgresql+psycopg2://meeting_assistant:meeting_assistant@localhost:5432/meeting_assistant",
+    )
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
+    CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+    # Only needed when several processes (multiple web workers / Celery) emit SocketIO events.
+    # Leave unset for a single web process, e.g. local development without Redis.
+    SOCKETIO_MESSAGE_QUEUE = os.environ.get("SOCKETIO_MESSAGE_QUEUE") or None
+
+    TOKEN_ENCRYPTION_KEY = os.environ.get("TOKEN_ENCRYPTION_KEY", "")
+
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "")
+
+    MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID", "")
+    MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET", "")
+    MS_TENANT_ID = os.environ.get("MS_TENANT_ID", "common")
+    MS_REDIRECT_URI = os.environ.get("MS_REDIRECT_URI", "")
+
+    LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic")
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+    LLM_MODEL = os.environ.get("LLM_MODEL", "claude-opus-5")
+    LLM_EFFORT = os.environ.get("LLM_EFFORT", "high")  # low | medium | high | xhigh | max
+    LLM_MAX_OUTPUT_TOKENS = int(os.environ.get("LLM_MAX_OUTPUT_TOKENS", 32000))
+    # Re-run a safety-declined request on Anthropic's recommended fallback model (server-side)
+    LLM_FALLBACKS_ENABLED = os.environ.get("LLM_FALLBACKS_ENABLED", "true").lower() == "true"
+    # Above this prompt size the transcript is summarised chunk by chunk first (map-reduce)
+    MINUTES_MAX_INPUT_TOKENS = int(os.environ.get("MINUTES_MAX_INPUT_TOKENS", 600_000))
+    MINUTES_CHUNK_TOKENS = int(os.environ.get("MINUTES_CHUNK_TOKENS", 150_000))
+    MINUTES_INLINE = False  # True = generate synchronously inside the request (tests only)
+
+    # "small" keeps up with real time on a typical CPU; "medium" is more accurate but ~3x slower
+    # than real time on CPU (see docs/architecture/architecture.md benchmark) — use it only with a GPU.
+    WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "small")
+    WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
+    WHISPER_COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
+    WHISPER_CPU_THREADS = int(os.environ.get("WHISPER_CPU_THREADS", min(8, os.cpu_count() or 4)))
+    WHISPER_LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "zh") or None
+    WHISPER_INITIAL_PROMPT = os.environ.get("WHISPER_INITIAL_PROMPT", "以下是繁體中文的會議逐字稿。")
+
+    # Real-time transcription limits (threat_model.md DoS control, REQ-20)
+    TRANSCRIPTION_INLINE = False  # True = run VAD/ASR in the SocketIO handler (tests only)
+    TRANSCRIPTION_MAX_CHUNK_BYTES = int(os.environ.get("TRANSCRIPTION_MAX_CHUNK_BYTES", 32000))  # 1s of 16kHz PCM16
+    TRANSCRIPTION_MAX_BYTES_PER_SECOND = int(os.environ.get("TRANSCRIPTION_MAX_BYTES_PER_SECOND", 64000))  # 2x realtime
+    TRANSCRIPTION_MAX_RECORDING_SECONDS = int(os.environ.get("TRANSCRIPTION_MAX_RECORDING_SECONDS", 4 * 3600))
+    # Warn the client when this much audio is queued but not yet transcribed (ASR slower than real time)
+    TRANSCRIPTION_LAG_WARNING_SECONDS = int(os.environ.get("TRANSCRIPTION_LAG_WARNING_SECONDS", 30))
+    # Uploaded recordings (REQ-47): the file is deleted once transcribed; length is capped by
+    # TRANSCRIPTION_MAX_RECORDING_SECONDS like a live recording.
+    TRANSCRIPTION_UPLOAD_MAX_BYTES = int(os.environ.get("TRANSCRIPTION_UPLOAD_MAX_BYTES", 500 * 1024 * 1024))
+    # Reject oversized request bodies before they are parsed (the CSRF check reads the form first).
+    MAX_CONTENT_LENGTH = TRANSCRIPTION_UPLOAD_MAX_BYTES + 1024 * 1024
+
+    # Speaker diarization (REQ-09) — optional, needs requirements-diarization.txt + a Hugging Face token
+    DIARIZATION_ENABLED = os.environ.get("DIARIZATION_ENABLED", "false").lower() == "true"
+    DIARIZATION_MODEL = os.environ.get("DIARIZATION_MODEL", "pyannote/speaker-diarization-community-1")
+    HF_TOKEN = os.environ.get("HF_TOKEN", "")
+
+    # Times shown in the UI (DB stores UTC). Calendar events offered when creating a meeting:
+    # from CALENDAR_LOOKBACK_HOURS ago (meetings already under way) to CALENDAR_LOOKAHEAD_DAYS ahead.
+    DISPLAY_TIMEZONE = os.environ.get("DISPLAY_TIMEZONE", "Asia/Taipei")
+    CALENDAR_LOOKBACK_HOURS = int(os.environ.get("CALENDAR_LOOKBACK_HOURS", 24))
+    CALENDAR_LOOKAHEAD_DAYS = int(os.environ.get("CALENDAR_LOOKAHEAD_DAYS", 14))
+    CALENDAR_MAX_EVENTS = int(os.environ.get("CALENDAR_MAX_EVENTS", 50))
+
+    # Sending minutes to participants (REQ-15 ~ REQ-17): as the organizer via Gmail / Graph
+    MAIL_MAX_RECIPIENTS = int(os.environ.get("MAIL_MAX_RECIPIENTS", 100))
+    MAIL_SEND_ATTEMPTS = int(os.environ.get("MAIL_SEND_ATTEMPTS", 3))  # only 429/503 are retried
+    MAIL_RETRY_BACKOFF_SECONDS = float(os.environ.get("MAIL_RETRY_BACKOFF_SECONDS", 2))
+    MAIL_RESEND_COOLDOWN_SECONDS = int(os.environ.get("MAIL_RESEND_COOLDOWN_SECONDS", 60))
+    # Development only: organizers without a mail-capable OAuth account get their mail written
+    # as .eml files here instead of sent. create_app refuses to start with it in production.
+    MAIL_OUTBOX_ENABLED = False
+    MAIL_OUTBOX_DIR = os.environ.get("MAIL_OUTBOX_DIR", "")  # default: <instance>/outbox
+    MAIL_INLINE = False  # True = call the mail API in the request thread (tests only)
+    # Word/PDF attachments together; Graph sendMail rejects requests over ~4 MB
+    MAIL_MAX_ATTACHMENT_BYTES = int(os.environ.get("MAIL_MAX_ATTACHMENT_BYTES", 3_000_000))
+
+    # PDF export needs a font with Traditional Chinese glyphs. Empty = auto-detect
+    # (Windows Microsoft JhengHei, or fonts-noto-cjk on Debian/Ubuntu — see Dockerfile).
+    PDF_FONT_PATH = os.environ.get("PDF_FONT_PATH", "")
+    PDF_BOLD_FONT_PATH = os.environ.get("PDF_BOLD_FONT_PATH", "")
+
+    WTF_CSRF_ENABLED = True
+    # Passwordless login for local testing without OAuth credentials (REQ-29).
+    # Only DevelopmentConfig turns it on; create_app refuses to start with it in production.
+    DEV_LOGIN_ENABLED = False
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+
+class DevelopmentConfig(BaseConfig):
+    DEBUG = True
+    DEV_LOGIN_ENABLED = os.environ.get("DEV_LOGIN_ENABLED", "true").lower() == "true"
+    MAIL_OUTBOX_ENABLED = os.environ.get("MAIL_OUTBOX_ENABLED", "true").lower() == "true"
+
+
+class TestingConfig(BaseConfig):
+    TESTING = True
+    WTF_CSRF_ENABLED = False
+    TRANSCRIPTION_INLINE = True
+    MINUTES_INLINE = True
+    MAIL_INLINE = True
+    MAIL_RETRY_BACKOFF_SECONDS = 0
+    SOCKETIO_MESSAGE_QUEUE = None
+    DIARIZATION_ENABLED = False
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "TEST_DATABASE_URL",
+        "postgresql+psycopg2://meeting_assistant:meeting_assistant@localhost:5432/meeting_assistant_test",
+    )
+    TOKEN_ENCRYPTION_KEY = os.environ.get(
+        "TOKEN_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    )
+
+
+class ProductionConfig(BaseConfig):
+    DEBUG = False
+    SESSION_COOKIE_SECURE = True
+
+
+config_by_name = {
+    "development": DevelopmentConfig,
+    "testing": TestingConfig,
+    "production": ProductionConfig,
+}
+
+
+def get_config(name: str | None = None):
+    name = name or os.environ.get("FLASK_ENV", "development")
+    return config_by_name.get(name, DevelopmentConfig)

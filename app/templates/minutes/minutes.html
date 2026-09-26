@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}會議記錄：{{ meeting.title }} - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .panel { margin: 1.25rem 0; padding: 1rem 1.25rem; border: 1px solid rgba(120, 180, 255, 0.35); border-radius: 12px; background: rgba(20, 44, 92, 0.45); }
+  .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid rgba(140, 196, 255, .35); border-top-color: #8cc4ff; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -0.15em; margin-right: .4rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  textarea.minutes { width: 100%; min-height: 520px; font-family: ui-monospace, Consolas, "Microsoft JhengHei", monospace; line-height: 1.6; }
+  .meta { font-size: .9rem; opacity: .75; }
+  .regen { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+  .warn { color: #ffcf8a; }
+  ul.recipients { margin: .25rem 0 .75rem; padding-left: 1.25rem; }
+  .btn-secondary { background: rgba(255, 255, 255, 0.12); box-shadow: none; }
+  .btn-secondary:hover { background: rgba(255, 255, 255, 0.22); }
+  .attach { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+</style>
+{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('meetings.detail', meeting_id=meeting.id) }}">← 回到會議</a></p>
+  <h1>會議記錄：{{ meeting.title }}</h1>
+
+  <div id="minutes-job" class="panel" data-status-url="{{ url_for('minutes.minutes_status', meeting_id=meeting.id) }}"
+       data-running="{{ 'true' if job and job.state == 'running' else 'false' }}" role="status" aria-live="polite"
+       {% if not (job and job.state == 'running') and not error_message %}hidden{% endif %}>
+    {% if job and job.state == 'running' %}
+      <span class="spinner"></span><span id="minutes-progress">{{ job.progress }}</span>
+      <p class="meta">AI 撰寫會議記錄通常需要數十秒到數分鐘，完成後頁面會自動更新。</p>
+    {% elif error_message %}
+      <strong>產生失敗：</strong>{{ error_message }}
+    {% endif %}
+  </div>
+
+  {% if minutes %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="meta">由 {{ minutes.llm_model }} 產生於 {{ minutes.generated_at.strftime('%Y-%m-%d %H:%M') }}（UTC）・
+        範本：{{ minutes.template.name if minutes.template else builtin_name }}・
+        {% set status_labels = {'draft': '草稿（寄出前可編輯）', 'sent': '已寄給與會者', 'send_failed': '寄送失敗'} %}
+        狀態：{{ status_labels.get(minutes.status, minutes.status) }}</p>
+      <p>請確認 AI 產生的內容是否正確，特別是決議、負責人與期限；可直接修改後儲存。</p>
+      <textarea class="minutes" name="content_markdown" required maxlength="100000"
+                {% if job and job.state == 'running' %}disabled{% endif %}>{{ minutes.content_markdown }}</textarea>
+      <div class="btn-row" style="margin-top: .75rem">
+        <button class="btn" type="submit" {% if job and job.state == 'running' %}disabled{% endif %}>儲存修改</button>
+        {% if not (job and job.state == 'running') %}
+          <a class="btn btn-secondary" href="{{ url_for('minutes.minutes_export', meeting_id=meeting.id, fmt='docx') }}">下載 Word</a>
+          <a class="btn btn-secondary" href="{{ url_for('minutes.minutes_export', meeting_id=meeting.id, fmt='pdf') }}">下載 PDF</a>
+        {% endif %}
+      </div>
+      <p class="meta">下載與附件內容為<strong>已儲存</strong>的版本，並在最上方加上會議時間、主辦人與與會者。</p>
+    </form>
+  {% elif not (job and job.state == 'running') %}
+    <p>這場會議還沒有會議記錄。</p>
+  {% endif %}
+
+  {% if minutes and not (job and job.state == 'running') %}
+  <section class="panel" id="send-minutes">
+    <h2>寄送給與會者</h2>
+    {% if minutes.sent_at %}
+      <p>已於 {{ minutes.sent_at.strftime('%Y-%m-%d %H:%M') }}（UTC）寄出{% if last_send %}給 {{ last_send.event_metadata.get('count') }} 位與會者{% endif %}。</p>
+    {% endif %}
+    {% if minutes.status == 'send_failed' %}
+      <p class="warn">上次寄送失敗，確認問題後可重新寄送。</p>
+    {% endif %}
+    {% if recipients %}
+      <p>收件人（共 {{ recipients|length }} 位，來自會議的與會者名單）：</p>
+      <ul class="recipients">
+        {% for r in recipients %}<li>{{ r.name }}{% if r.name != r.email %} &lt;{{ r.email }}&gt;{% endif %}</li>{% endfor %}
+      </ul>
+      {% if skipped %}<p class="warn">以下 Email 格式不正確，不會寄送：{{ skipped|join('、') }}</p>{% endif %}
+      {% if recipients|length > max_recipients %}<p class="warn">收件人超過上限 {{ max_recipients }} 位，請先移除部分與會者。</p>{% endif %}
+      {% if backend %}
+        <p class="meta">寄件方式：{{ backend_label }}・寄出的是<strong>已儲存</strong>的版本，請先儲存修改。</p>
+        <form method="post" action="{{ url_for('minutes.minutes_send', meeting_id=meeting.id) }}"
+              data-confirm="{{ '這份會議記錄已寄出過，確定要再寄一次給' if minutes.sent_at else '確定要寄給' }} {{ recipients|length }} 位與會者嗎？">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <p class="attach">附件（選填）：
+            <label><input type="checkbox" name="attach" value="docx"> Word 檔</label>
+            <label><input type="checkbox" name="attach" value="pdf"> PDF 檔</label>
+          </p>
+          <button class="btn" type="submit">{{ '再寄一次' if minutes.sent_at else ('重新寄送' if minutes.status == 'send_failed' else '寄出會議記錄') }}</button>
+        </form>
+      {% else %}
+        <p class="warn">您的帳號尚未授權寄信：請以 Google 或 Microsoft 帳號登入並同意寄信權限。</p>
+      {% endif %}
+    {% else %}
+      <p>這場會議沒有其他與會者可寄送。
+        <a href="{{ url_for('meetings.detail', meeting_id=meeting.id, _anchor='participants') }}">到會議頁新增或同步與會者</a></p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if not (job and job.state == 'running') %}
+  <section class="panel">
+    <h2>{{ '重新產生' if minutes else '產生會議記錄' }}</h2>
+    <form class="regen" method="post" action="{{ url_for('minutes.minutes_generate', meeting_id=meeting.id) }}"
+          {% if minutes %}data-confirm="重新產生會覆蓋目前的會議記錄（包含您的修改），確定嗎？"{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>範本
+        <select name="template_id">
+          <option value="">{{ '預設範本' if templates|selectattr('is_default')|list else builtin_name }}</option>
+          {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <button class="btn" type="submit">{{ '重新產生' if minutes else '產生會議記錄' }}</button>
+      <a href="{{ url_for('minutes.template_list') }}">管理範本</a>
+    </form>
+  </section>
+  {% endif %}
+
+  <script src="{{ url_for('static', filename='js/minutes.js') }}"></script>
+{% endblock %}

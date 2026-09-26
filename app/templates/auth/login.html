@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}登入 - 會議小助手{% endblock %}
+
+{% block body_class %}login-page{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* 登入頁加寬，讓左側圖片與右側卡片並排 */
+  body.login-page { max-width: 1240px; }
+  .login-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 2.5rem;
+    align-items: center;
+    margin-top: 1.5rem;
+  }
+  /* 背景圖獨立成左欄，以遮罩羽化四邊融入頁面漸層，不與登入卡片重疊 */
+  .login-visual {
+    aspect-ratio: 3 / 2;
+    background-image: url("{{ url_for('static', filename='pic/background.png') }}");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%);
+            mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%);
+  }
+  .login-card {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(20, 44, 92, 0.72) 0%, rgba(10, 22, 50, 0.62) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(120, 180, 255, 0.35);
+    box-shadow: 0 0 30px rgba(56, 140, 255, 0.25);
+    border-radius: 16px;
+    padding: 2rem;
+  }
+  .btn-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .btn-stack .btn-lg {
+    width: 100%;
+  }
+  .dev-login {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px dashed rgba(255, 196, 0, 0.5);
+  }
+  .dev-login h2 { font-size: 1rem; margin: 0 0 .35rem; color: #ffd666; }
+  .dev-login p { font-size: .85rem; margin: 0 0 .75rem; opacity: .8; }
+  .dev-login label { display: block; font-size: .9rem; margin-bottom: .6rem; }
+  .dev-login input { width: 100%; margin-top: .25rem; }
+  .dev-login .btn { width: 100%; background: #8a6d00; box-shadow: none; }
+  .dev-login .btn:hover { background: #a58300; }
+  @media (max-width: 900px) {
+    .login-hero { grid-template-columns: 1fr; gap: 1rem; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="login-hero">
+    <div class="login-visual" role="img" aria-label="會議小助手機器人介紹圖"></div>
+    <div class="login-card">
+      <h1>登入</h1>
+      <p>請使用您的會議帳號登入，系統將取得行事曆與郵件寄送權限，用於同步與會者名單與寄送會議記錄。</p>
+      <div class="btn-stack">
+        <a class="btn btn-lg" href="{{ url_for('auth.google_login') }}">使用 Google 登入</a>
+        <a class="btn btn-lg" href="{{ url_for('auth.microsoft_login') }}">使用 Microsoft 登入</a>
+      </div>
+      {% if config.DEV_LOGIN_ENABLED %}
+      <form class="dev-login" method="post" action="{{ url_for('auth.dev_login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h2>開發模式登入（僅限本機測試）</h2>
+        <p>不需 OAuth 即可登入；正式環境不會出現。此帳號沒有行事曆/郵件權限，無法同步與會者或寄信。</p>
+        <label>Email<input type="email" name="email" value="dev@localhost.test" required maxlength="255"></label>
+        <label>名稱<input type="text" name="display_name" value="開發測試" required maxlength="100"></label>
+        <button class="btn" type="submit">以開發模式登入</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}我的會議 - 會議小助手{% endblock %}
+{% block content %}
+  <h1>我的會議</h1>
+  <p><a class="btn" href="{{ url_for('meetings.create') }}">+ 新增會議</a></p>
+  <table>
+    <thead><tr><th>標題</th><th>平台</th><th>狀態</th><th>時間</th></tr></thead>
+    <tbody>
+    {% for meeting in meetings %}
+      <tr>
+        <td><a href="{{ url_for('meetings.detail', meeting_id=meeting.id) }}">{{ meeting.title }}</a></td>
+        <td>{{ meeting.platform }}</td>
+        <td>{{ meeting.status|meeting_status }}</td>
+        <td>{{ meeting.scheduled_start|localtime('%Y-%m-%d（%W）%H:%M') if meeting.scheduled_start else '-' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4">尚無會議</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

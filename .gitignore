@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+.env
+*.env.local
+
+instance/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.bandit_report.json
+
+*.log
+
+.vscode/
+.idea/
+
+migrations/versions/*.pyc
+
+# Model weights downloaded at runtime
+models_cache/
+
+# Local standalone PostgreSQL instance used for dev/testing without admin rights
+# (started via `pg_ctl start -D .devdb/pgdata -o "-p 5433"`, see README)
+.devdb/

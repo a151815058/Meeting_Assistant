@@ -1,0 +1,51 @@
+# Core web framework
+Flask==3.0.3
+Flask-SocketIO==5.3.6
+Flask-Login==0.6.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+Flask-WTF==1.2.1
+
+# Server / async
+eventlet==0.36.1
+gunicorn==22.0.0
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.31
+
+# Background jobs
+celery==5.4.0
+redis==5.0.7
+
+# Validation
+marshmallow==3.21.3
+
+# Auth / external APIs
+google-auth==2.32.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.137.0
+msal==1.29.0
+requests==2.32.3
+
+# LLM provider
+anthropic==1.8.0
+
+# Speech-to-text pipeline (faster-whisper bundles the Silero VAD ONNX model; no torch needed)
+faster-whisper==1.2.1
+numpy>=2.0
+# Speaker diarization (pyannote.audio + torch) is optional: see requirements-diarization.txt
+
+# Security
+cryptography==43.0.0
+python-dotenv==1.0.1
+# IANA time-zone data for zoneinfo (Windows ships none); used for DISPLAY_TIMEZONE
+tzdata==2026.4
+
+# Templating for minutes generation
+Jinja2==3.1.4
+
+# Minutes export (Word / PDF); PDF needs a CJK font, see PDF_FONT_PATH
+markdown-it-py==4.2.0
+python-docx==1.2.0
+fpdf2==2.8.8

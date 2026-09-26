@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}會議記錄範本 - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .inline-form { display: inline; }
+  .link-btn { background: none; border: none; padding: 0; color: #8cc4ff; text-decoration: underline; cursor: pointer; font: inherit; }
+  .link-btn.danger { color: #ffb4ab; }
+  .badge { font-size: .8rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(56, 140, 255, .3); margin-left: .35rem; }
+  .muted { opacity: .7; font-size: .9rem; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>會議記錄範本</h1>
+  <p>範本決定 AI 產生的會議記錄結構。產生會議記錄時若未指定範本，會使用標示「預設」的範本；沒有自訂預設範本時使用{{ builtin_name }}。</p>
+  <p><a class="btn" href="{{ url_for('minutes.template_new') }}">+ 新增範本</a></p>
+  <table>
+    <thead><tr><th>名稱</th><th>說明</th><th>操作</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>{{ builtin_name }}{% if not templates|selectattr('is_default')|list %}<span class="badge">預設</span>{% endif %}</td>
+        <td class="muted">內建範本：摘要、討論重點、決議事項、待辦事項</td>
+        <td class="muted">不可修改</td>
+      </tr>
+      {% for t in templates %}
+      <tr>
+        <td>{{ t.name }}{% if t.is_default %}<span class="badge">預設</span>{% endif %}</td>
+        <td>{{ t.description or '' }}</td>
+        <td>
+          <a href="{{ url_for('minutes.template_edit', template_id=t.id) }}">編輯</a>
+          {% if not t.is_default %}
+          ・<form class="inline-form" method="post" action="{{ url_for('minutes.template_set_default', template_id=t.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-btn" type="submit">設為預設</button>
+            </form>
+          {% endif %}
+          ・<form class="inline-form" method="post" action="{{ url_for('minutes.template_delete', template_id=t.id) }}"
+                data-confirm="確定要刪除範本「{{ t.name }}」嗎？已產生的會議記錄不受影響。">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-btn danger" type="submit">刪除</button>
+            </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

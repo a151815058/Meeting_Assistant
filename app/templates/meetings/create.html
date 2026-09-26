@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}新增會議 - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .hint { font-size: .9rem; opacity: .75; }
+  .warn { color: #ffcf8a; }
+  details { margin: 1rem 0; }
+  summary { cursor: pointer; }
+  select, input[type="text"] { width: 100%; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>新增會議</h1>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {% if has_calendar %}
+      <p><label>從行事曆選擇會議（選填，選了會自動帶入標題、時間與與會者名單）<br>
+        <select name="calendar_event" id="calendar-event">
+          <option value="">— 不連結行事曆（手動建立）—</option>
+          {% for provider, group in events|groupby('provider') %}
+            <optgroup label="{{ provider_labels[provider] }}">
+              {% for e in group %}
+                {% set value = e.platform ~ '|' ~ e.event_id %}
+                <option value="{{ value }}" data-title="{{ e.title }}"
+                        {% if form.get('calendar_event') == value %}selected{% endif %}>
+                  {% if e.all_day %}{{ e.start|localtime('%m/%d（%W）') }} 全天{% else %}{{ e.start|localtime('%m/%d（%W）%H:%M') }}{% if e.end %}–{{ e.end|localtime('%H:%M') }}{% endif %}{% endif %}
+                  {{ e.title }}{% if e.event_id in created %}（已建立）{% endif %}
+                </option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+      </label></p>
+      {% if not events and not calendar_errors %}
+        <p class="hint">近期（過去 {{ config.CALENDAR_LOOKBACK_HOURS }} 小時到未來 {{ config.CALENDAR_LOOKAHEAD_DAYS }} 天）行事曆沒有會議。</p>
+      {% endif %}
+      {% for message in calendar_errors %}<p class="hint warn">{{ message }}</p>{% endfor %}
+    {% else %}
+      <p class="hint">以 Google 或 Microsoft 帳號登入後，可直接從行事曆選擇會議並自動帶入與會者。</p>
+    {% endif %}
+
+    <p><label>標題{% if has_calendar %}（選擇行事曆會議時可留空，會使用行事曆上的標題）{% endif %}<br>
+      <input type="text" name="title" id="meeting-title" maxlength="500" value="{{ form.get('title', '') }}"
+             {% if not has_calendar %}required{% endif %}>
+    </label></p>
+
+    <details id="manual-event" {% if form.get('platform_event_id') %}open{% endif %}>
+      <summary>進階：手動指定平台與行事曆事件 ID</summary>
+      <p><label>平台<br>
+        <select name="platform">
+          {% for value, label in [('manual', '手動（無自動同步）'), ('google_meet', 'Google Meet'), ('teams', 'Microsoft Teams')] %}
+            <option value="{{ value }}" {% if form.get('platform') == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label></p>
+      <p><label>平台行事曆事件 ID（用於同步與會者名單）<br>
+        <input type="text" name="platform_event_id" maxlength="255" value="{{ form.get('platform_event_id', '') }}">
+      </label></p>
+      <p class="hint">上方已選擇行事曆會議時，這裡的設定不會使用。</p>
+    </details>
+
+    <button class="btn" type="submit">建立</button>
+  </form>
+  <script src="{{ url_for('static', filename='js/meeting_create.js') }}"></script>
+{% endblock %}

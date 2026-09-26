@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}{{ meeting.title }} - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .recorder { margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px solid rgba(120, 180, 255, 0.35); border-radius: 12px; background: rgba(20, 44, 92, 0.45); }
+  .recorder .btn:disabled, .recorder input:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+  .recorder .btn-stop { background: #c5221f; }
+  .recorder .btn-stop:hover { background: #d93025; }
+  #record-status { margin: .75rem 0 0; min-height: 1.5em; }
+  .hint { font-size: .9rem; opacity: .75; }
+  .btn-small { padding: .25rem .6rem; font-size: .85rem; box-shadow: none; background: rgba(255, 255, 255, 0.12); }
+  .btn-small:hover { background: #c5221f; }
+  .add-participant { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
+  /* 頁籤：分隔「即時錄音轉文字」「會議記錄」「與會人員」 */
+  .tabs { display: flex; gap: .25rem; border-bottom: 1px solid rgba(140, 196, 255, 0.35); margin: 1.5rem 0 0; flex-wrap: wrap; }
+  .tab { padding: .65rem 1.3rem; font: inherit; line-height: 1.4; color: #b9d4ff; background: rgba(56, 128, 255, 0.08); cursor: pointer; white-space: nowrap;
+    border: 1px solid rgba(140, 196, 255, 0.25); border-bottom: none; border-radius: 8px 8px 0 0; margin-bottom: -1px; transition: background .15s, color .15s; }
+  .tab:hover { color: #fff; background: rgba(56, 128, 255, 0.2); }
+  .tab:focus-visible { outline: 2px solid #4a9dff; outline-offset: -2px; }
+  .tab[aria-selected="true"] { color: #fff; background: rgba(20, 44, 92, 0.85); border-color: rgba(140, 196, 255, 0.55); box-shadow: inset 0 2px 0 #4a9dff; }
+  .tab-panel { padding: 1rem 0 0; }
+  .tab-panel > .recorder:first-child { margin-top: 0; }
+  .tab-panel h2 { margin-top: 0; }
+  .sync-form { margin-bottom: 1rem; }
+  .upload-audio h3 { margin: 0 0 .75rem; }
+  #upload-form { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+  #upload-form input[type="file"] { max-width: 100%; }
+  #upload-form input[type="file"]::file-selector-button { font: inherit; color: #e3ecff; background: rgba(56, 128, 255, 0.2);
+    border: 1px solid rgba(140, 196, 255, 0.45); border-radius: 4px; padding: .35rem .8rem; margin-right: .6rem; cursor: pointer; }
+  #upload-form input[type="file"]::file-selector-button:hover { background: rgba(56, 128, 255, 0.35); }
+  #upload-progress { width: 100%; height: .6rem; margin-top: .75rem; accent-color: #4a9dff; }
+  #upload-status { margin: .5rem 0 0; min-height: 1.5em; }
+  .tab-panel h3 { margin: 1.5rem 0 .5rem; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>{{ meeting.title }}</h1>
+  <p>平台：{{ meeting.platform }} ・ 狀態：<span id="meeting-status"
+    data-label-recording="{{ 'recording'|meeting_status }}"
+    data-label-transcribing="{{ 'transcribing'|meeting_status }}"
+    data-label-transcribed="{{ 'transcribed'|meeting_status }}">{{ meeting.status|meeting_status }}</span>
+    {% if meeting.scheduled_start %} ・ 時間：{{ meeting.scheduled_start|localtime('%Y-%m-%d（%W）%H:%M') }}{% if meeting.scheduled_end %}–{{ meeting.scheduled_end|localtime('%H:%M') }}{% endif %}{% endif %}</p>
+
+  <div class="tabs" role="tablist" aria-label="會議內容">
+    <button class="tab" type="button" role="tab" id="tab-live" aria-controls="panel-live" aria-selected="true">即時錄音轉文字</button>
+    <button class="tab" type="button" role="tab" id="tab-minutes" aria-controls="panel-minutes" aria-selected="false" tabindex="-1">會議記錄</button>
+    <button class="tab" type="button" role="tab" id="tab-participants" aria-controls="panel-participants" aria-selected="false" tabindex="-1">與會人員（{{ meeting.participants|length }}）</button>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-live" aria-labelledby="tab-live" data-hash="live">
+    <section class="recorder" id="recorder"
+             data-meeting-id="{{ meeting.id }}"
+             data-worklet-url="{{ url_for('static', filename='js/pcm-worklet.js') }}">
+      <div class="btn-row">
+        <button class="btn" id="record-start" type="button">開始錄音</button>
+        <button class="btn btn-stop" id="record-stop" type="button" disabled>停止錄音</button>
+      </div>
+      <p id="record-status" role="status" aria-live="polite"></p>
+      <p class="hint">建議使用耳機或獨立麥克風以降低串音。錄音原始音訊不會保存，只保存轉出的逐字稿。</p>
+    </section>
+
+    <section class="recorder upload-audio">
+      <h3>上傳錄音檔</h3>
+      {% set upload_max_mb = config.TRANSCRIPTION_UPLOAD_MAX_BYTES // (1024 * 1024) %}
+      {% set upload_max_hours = config.TRANSCRIPTION_MAX_RECORDING_SECONDS / 3600 %}
+      <form id="upload-form" method="post" enctype="multipart/form-data"
+            action="{{ url_for('meetings.upload_audio', meeting_id=meeting.id) }}"
+            data-max-bytes="{{ config.TRANSCRIPTION_UPLOAD_MAX_BYTES }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="file-pick">
+          <input type="file" id="upload-file" name="audio" required
+                 accept=".mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.webm,.wma,.mp4,audio/*">
+        </label>
+        <button class="btn" id="upload-submit" type="submit">上傳並轉錄</button>
+      </form>
+      <progress id="upload-progress" max="100" value="0" hidden></progress>
+      <p id="upload-status" role="status" aria-live="polite"></p>
+      <p class="hint">支援 MP3、WAV、M4A、AAC、FLAC、OGG、OPUS、WEBM、WMA、MP4，檔案上限 {{ upload_max_mb }} MB、長度上限 {{ upload_max_hours|round(1)|replace('.0', '') }} 小時。
+        轉出的逐字稿會接在現有逐字稿之後；錄音檔轉完後立即刪除，不會保存。</p>
+    </section>
+
+    <h3>逐字稿</h3>
+    <table>
+      <thead><tr><th>時間</th><th>發言人</th><th>內容</th></tr></thead>
+      <tbody id="transcript-body">
+      {% for seg in meeting.transcript_segments %}
+        <tr data-segment-id="{{ seg.id }}" data-start-ms="{{ seg.start_ms }}">
+          <td>{{ (seg.start_ms / 1000) | round(1) }}s</td>
+          <td class="speaker">{{ seg.platform_speaker_id or seg.speaker_label or '-' }}</td>
+          <td>{{ seg.text }}</td>
+        </tr>
+      {% else %}
+        <tr id="transcript-empty"><td colspan="3">尚無逐字稿</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-minutes" aria-labelledby="tab-minutes" data-hash="minutes">
+    <section class="recorder">
+      {% if meeting.minutes %}
+        {% set minutes_labels = {'draft': '草稿，寄出前可編輯', 'sent': '已寄給與會者', 'send_failed': '寄送失敗，可重試'} %}
+        <p>已產生會議記錄（{{ minutes_labels.get(meeting.minutes.status, meeting.minutes.status) }}）。</p>
+        <p><a class="btn" href="{{ url_for('minutes.minutes_view', meeting_id=meeting.id) }}">查看／編輯會議記錄</a></p>
+      {% elif meeting.status == 'processing' %}
+        <p><a class="btn" href="{{ url_for('minutes.minutes_view', meeting_id=meeting.id) }}">會議記錄產生中，查看進度</a></p>
+      {% else %}
+        <p class="hint">錄音結束後，可依範本由 AI 產生會議記錄。</p>
+        <form method="post" action="{{ url_for('minutes.minutes_generate', meeting_id=meeting.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn" type="submit">以預設範本產生會議記錄</button>
+          <a href="{{ url_for('minutes.minutes_view', meeting_id=meeting.id) }}">選擇其他範本</a>
+        </form>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="tab-panel" role="tabpanel" id="panel-participants" aria-labelledby="tab-participants" data-hash="participants">
+    {% if meeting.platform in ('google_meet', 'teams') %}
+      <form class="sync-form" method="post" action="{{ url_for('meetings.sync_participants', meeting_id=meeting.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" type="submit">從行事曆同步與會者名單</button>
+      </form>
+    {% endif %}
+
+    <table>
+      <thead><tr><th>姓名</th><th>Email</th><th>回覆狀態</th><th>主辦人</th><th></th></tr></thead>
+      <tbody>
+      {% for p in meeting.participants %}
+        <tr>
+          <td>{{ p.display_name }}</td>
+          <td>{{ p.email }}</td>
+          <td>{{ p.response_status }}</td>
+          <td>{{ '是' if p.is_organizer else '' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('meetings.remove_participant', meeting_id=meeting.id, participant_id=p.id) }}"
+                  data-confirm="確定要將 {{ p.email }} 從與會者名單移除嗎？">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-small" type="submit" aria-label="移除 {{ p.email }}">移除</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5">尚無與會者資料</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <form class="add-participant" method="post" action="{{ url_for('meetings.add_participant', meeting_id=meeting.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Email <input type="email" name="email" required maxlength="255" autocomplete="off"></label>
+      <label>姓名 <input type="text" name="display_name" maxlength="255" placeholder="選填"></label>
+      <button class="btn" type="submit">新增與會者</button>
+    </form>
+    <p class="hint">會議記錄只會寄給這份名單上的人（不含主辦人本人）。</p>
+  </div>
+
+  <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/recorder.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/tabs.js') }}"></script>
+{% endblock %}

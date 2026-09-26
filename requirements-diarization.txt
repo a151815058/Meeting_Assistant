@@ -1,0 +1,5 @@
+# Optional: speaker diarization (REQ-09). Pulls in torch (large download).
+# Also requires DIARIZATION_ENABLED=true and HF_TOKEN in .env, and accepting the model's
+# terms on Hugging Face (https://huggingface.co/pyannote/speaker-diarization-community-1).
+-r requirements.txt
+pyannote.audio==4.0.7
