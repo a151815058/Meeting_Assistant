@@ -37,6 +37,27 @@ def _nav(html: str) -> str:
     return html[html.index("<nav>"):html.index("</nav>")]
 
 
+def test_site_root_sends_anonymous_users_to_login(client):
+    """TC-53: 網站根網址不回 404：未登入經會議列表導向登入頁。"""
+    resp = client.get("/")
+    assert resp.status_code == 302 and resp.headers["Location"] == "/meetings/"
+    assert client.get("/", follow_redirects=True).request.path == "/auth/login"
+
+
+def test_site_root_shows_meetings_when_signed_in(client, app, db):
+    """TC-53: 已登入時網站根網址導向會議列表。"""
+    with app.app_context():
+        user = User(email="root@example.com", display_name="Root")
+        _db.session.add(user)
+        _db.session.commit()
+        user_id = user.id
+    with client.session_transaction() as sess:
+        sess["_user_id"] = user_id
+        sess["_fresh"] = True
+    resp = client.get("/", follow_redirects=True)
+    assert resp.status_code == 200 and resp.request.path == "/meetings/"
+
+
 def test_header_links_are_buttons_and_mark_current_page(client, app, db):
     """TC-44: 登入後頁首「會議」「範本」「登出」為導覽按鈕，目前所在頁面以 aria-current 標示。"""
     with app.app_context():

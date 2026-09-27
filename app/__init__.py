@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask
+from flask import Flask, redirect, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import get_config
@@ -53,6 +53,11 @@ def create_app(config_name: str | None = None) -> Flask:
     from app.transcription import register_socketio_handlers
 
     register_socketio_handlers(socketio)
+
+    @app.route("/")
+    def index():
+        # The bare site URL (REQ-53): the meeting list, which sends anonymous users to login.
+        return redirect(url_for("meetings.dashboard"))
 
     @app.route("/healthz")
     def healthz():
