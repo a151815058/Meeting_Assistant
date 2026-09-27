@@ -1,4 +1,5 @@
 import os
+import re
 
 from sqlalchemy.engine import URL
 
@@ -21,6 +22,13 @@ def supabase_database_url(env=os.environ) -> str | None:
         query={"sslmode": env.get("SUPABASE_DB_SSLMODE", "require").strip()},
     )
     return url.render_as_string(hide_password=False)
+
+
+def site_verification_token(raw: str) -> str:
+    """The token from Search Console's HTML tag (REQ-56), whether pasted bare, as content="...",
+    or as the whole <meta> tag."""
+    match = re.search(r"""content\s*=\s*["']([^"']*)["']""", raw)
+    return (match.group(1) if match else raw).strip().strip("\"'")
 
 
 class BaseConfig:
@@ -125,7 +133,7 @@ class BaseConfig:
     # Public pages (REQ-55 / REQ-56): contact shown on the privacy policy, and the token from Google
     # Search Console's "HTML tag" method that proves ownership of the site for OAuth brand verification.
     PRIVACY_CONTACT_EMAIL = os.environ.get("PRIVACY_CONTACT_EMAIL", "")
-    GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()
+    GOOGLE_SITE_VERIFICATION = site_verification_token(os.environ.get("GOOGLE_SITE_VERIFICATION", ""))
 
     WTF_CSRF_ENABLED = True
     # Passwordless login for local testing without OAuth credentials (REQ-29).

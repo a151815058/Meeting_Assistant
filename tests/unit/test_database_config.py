@@ -1,7 +1,20 @@
 import pytest
 from sqlalchemy.engine import make_url
 
-from app.config import ProductionConfig, supabase_database_url
+from app.config import ProductionConfig, site_verification_token, supabase_database_url
+
+
+@pytest.mark.parametrize("pasted", [
+    "N_Z5wvfb3qxNXrQcgwDxzi5SpY58fCmgJ3DC77Jgwd0",
+    '  N_Z5wvfb3qxNXrQcgwDxzi5SpY58fCmgJ3DC77Jgwd0\n',
+    'content="N_Z5wvfb3qxNXrQcgwDxzi5SpY58fCmgJ3DC77Jgwd0"',
+    '<meta name="google-site-verification" content="N_Z5wvfb3qxNXrQcgwDxzi5SpY58fCmgJ3DC77Jgwd0" />',
+    '"N_Z5wvfb3qxNXrQcgwDxzi5SpY58fCmgJ3DC77Jgwd0"',
+])
+def test_site_verification_token_accepts_what_people_paste(pasted):
+    """TC-56: GOOGLE_SITE_VERIFICATION 貼上純值、content="..."、或整個 meta 標籤皆取出正確的驗證值。"""
+    assert site_verification_token(pasted) == "N_Z5wvfb3qxNXrQcgwDxzi5SpY58fCmgJ3DC77Jgwd0"
+    assert site_verification_token("") == ""
 
 
 def test_supabase_url_is_unset_without_host():
