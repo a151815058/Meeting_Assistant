@@ -89,12 +89,25 @@ def test_privacy_policy_is_public_and_covers_google_review_items(client, app):
     assert 'href="mailto:privacy@example.com"' in html
 
 
-def test_every_page_links_to_privacy_policy(client):
-    """TC-55: 所有頁面頁尾皆有首頁與隱私權政策連結（含登入頁）。"""
-    for path in ("/", "/auth/login", "/privacy"):
+def test_every_page_links_to_privacy_policy_and_terms(client):
+    """TC-55／TC-57: 所有頁面頁尾皆有首頁、隱私權政策與服務條款連結（含登入頁）。"""
+    for path in ("/", "/auth/login", "/privacy", "/terms"):
         html = client.get(path).get_data(as_text=True)
         footer = html[html.index('<footer class="site-footer">'):]
-        assert 'href="/privacy"' in footer and 'href="/"' in footer, path
+        assert 'href="/privacy"' in footer and 'href="/"' in footer and 'href="/terms"' in footer, path
+
+
+def test_terms_of_service_is_public_and_covers_key_points(client, app):
+    """TC-57: 服務條款不需登入即可閱讀，涵蓋錄音同意、AI 內容須人工確認、禁止行為、免責、準據法、聯絡方式，並連到隱私權政策。"""
+    app.config["PRIVACY_CONTACT_EMAIL"] = "privacy@example.com"
+    resp = client.get("/terms")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "<h1>服務條款</h1>" in html
+    for point in ("取得必要的同意", "寄出或使用前，請務必自行確認內容正確", "禁止行為", "免責聲明", "準據法"):
+        assert point in html, point
+    assert 'href="/privacy"' in html.split('<footer class="site-footer">')[0]
+    assert 'href="mailto:privacy@example.com"' in html
 
 
 def test_google_site_verification_meta_tag_only_when_configured(client, app):

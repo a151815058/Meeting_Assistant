@@ -1,6 +1,6 @@
-"""Public pages that need no login: the homepage and the privacy policy (REQ-55).
+"""Public pages that need no login: the homepage, privacy policy (REQ-55) and terms of service (REQ-57).
 
-Google's OAuth brand verification requires both to be reachable without signing in, on the
+Google's OAuth brand verification requires them to be reachable without signing in, on the
 verified domain, with the homepage describing the app and linking to the privacy policy.
 """
 from flask import Blueprint, redirect, render_template, url_for
@@ -19,3 +19,8 @@ def home():
 @public_bp.route("/privacy")
 def privacy():
     return render_template("public/privacy.html")
+
+
+@public_bp.route("/terms")
+def terms():
+    return render_template("public/terms.html")
