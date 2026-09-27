@@ -1,0 +1,67 @@
+# Render Blueprint (REQ-52). Render dashboard > New > Blueprint > pick this repository.
+# Values marked `sync: false` are asked for when the Blueprint is first created and are never stored
+# in this file; fill them in (or change them later) under the service's Environment tab.
+services:
+  - type: web
+    name: meeting-assistant
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    branch: main
+    autoDeploy: true
+    # Closest Render region to the Supabase project (ap-northeast-1, Tokyo)
+    region: singapore
+    # Whisper "small" alone needs ~500 MB; 512 MB plans run out of memory
+    plan: standard
+    # Recording state lives in process memory: never run more than one instance
+    numInstances: 1
+    healthCheckPath: /healthz
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_APP
+        value: run.py
+      # Render terminates TLS in one proxy hop in front of the app
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      # Must equal the key of every other environment using the same database (e.g. local .env),
+      # or the stored OAuth refresh tokens cannot be decrypted
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+
+      # Supabase: same values as the local .env (Session pooler)
+      - key: SUPABASE_DB_HOST
+        sync: false
+      - key: SUPABASE_DB_PORT
+        value: "5432"
+      - key: SUPABASE_DB_NAME
+        value: postgres
+      - key: SUPABASE_DB_USER
+        sync: false
+      - key: SUPABASE_DB_PASSWORD
+        sync: false
+      - key: SUPABASE_DB_SSLMODE
+        value: require
+
+      # OAuth: the redirect URIs are https://<service>.onrender.com/auth/<provider>/callback and
+      # must also be registered in Google Cloud Console / the Azure app registration
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: MS_CLIENT_ID
+        sync: false
+      - key: MS_CLIENT_SECRET
+        sync: false
+      - key: MS_TENANT_ID
+        value: common
+      - key: MS_REDIRECT_URI
+        sync: false
+
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DISPLAY_TIMEZONE
+        value: Asia/Taipei

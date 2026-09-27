@@ -1,0 +1,16 @@
+# Keep secrets and local data out of the image (a local `docker build` would otherwise copy them)
+.env
+*.env.local
+.venv/
+venv/
+env/
+.devdb/
+instance/
+models_cache/
+.git/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.log

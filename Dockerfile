@@ -12,4 +12,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 5000
-CMD ["gunicorn", "-k", "eventlet", "-w", "1", "-b", "0.0.0.0:5000", "run:app"]
+# Exactly one worker: recording state lives in process memory. Render passes the port in $PORT.
+CMD ["sh", "-c", "exec gunicorn -k eventlet -w 1 -b 0.0.0.0:${PORT:-5000} run:app"]

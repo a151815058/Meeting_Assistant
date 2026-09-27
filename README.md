@@ -109,6 +109,18 @@ $PG = "C:\Program Files\PostgreSQL\17\bin"
 停止此實例：`& "$PG\pg_ctl.exe" -D ".devdb\pgdata" stop`；下次要用時重新
 `pg_ctl start` 即可（`.devdb/` 已加入 `.gitignore`，不會進版控）。
 
+**改用 Supabase（選用）**：在 `.env` 填入 `SUPABASE_DB_*` 參數即可，填了 `SUPABASE_DB_HOST` 就會取代 `DATABASE_URL`，
+清空則回到本機資料庫。參數取自 Supabase 專案頁面「Connect」：
+
+- 建議用 **Session pooler**（IPv4 網路可用）：`SUPABASE_DB_HOST=aws-0-<region>.pooler.supabase.com`、
+  `SUPABASE_DB_USER=postgres.<project-ref>`、`SUPABASE_DB_PORT=5432`。
+- Direct connection（`db.<project-ref>.supabase.co`、使用者 `postgres`）需要 IPv6 網路或 IPv4 add-on。
+- `SUPABASE_DB_PASSWORD` 直接填資料庫密碼，特殊字元會自動處理，不需要自行跳脫。
+- 預設 `SUPABASE_DB_SSLMODE=require`（加密連線）；正式環境設為更弱的值會拒絕啟動。
+- 第一次連線請執行 `flask db upgrade` 建立資料表。本機資料庫既有的資料不會自動搬移。
+- `flask db upgrade` 同時會關閉 Supabase 自動產生的 REST API 對這些資料表的存取（啟用 RLS、撤銷 `anon`／`authenticated` 權限，REQ-51）。
+  本應用程式不使用該 API，不需要也不應該把 anon key 放進 `.env`。
+
 ### 3. 安裝套件與初始化資料庫
 
 ```bash
@@ -136,7 +148,25 @@ python run.py
 無法同步與會者，寄信會改寫入本機信箱（見上方 Phase 5 說明），但可建立會議、手動新增與會者與測試即時錄音。正式環境一律關閉；若在正式設定中開啟，應用程式會拒絕啟動。
 不需要時可在 `.env` 設定 `DEV_LOGIN_ENABLED=false` 關閉。
 
+## 部署到 Render
+
+專案根目錄的 `render.yaml` 是 Render Blueprint：Render 介面「New → Blueprint」選擇此 GitHub repo，
+建立時會要求填入標示 `sync: false` 的機密（不寫入檔案）。
+
+- `TOKEN_ENCRYPTION_KEY`：須與其他共用同一個資料庫的環境（例如本機 `.env`）相同，否則已存的 OAuth token 無法解密。
+- `SUPABASE_DB_*`：與本機 `.env` 相同（Session pooler）。
+- `GOOGLE_REDIRECT_URI`／`MS_REDIRECT_URI`：`https://<服務名稱>.onrender.com/auth/google/callback`（Microsoft 為 `/auth/microsoft/callback`），並加到 Google Cloud Console／Azure 應用程式註冊的重新導向 URI。
+- `SECRET_KEY` 由 Render 自動產生；`TRUSTED_PROXY_HOPS=1` 讓程式在 Render 的 https proxy 後取得正確網址與使用者 IP。
+- 方案需至少約 2 GB 記憶體（`plan: standard`），且只能有 1 個 instance（錄音狀態在記憶體）。不需要 Redis。
+- 資料表變更：之後有新的 migration 時執行 `flask db upgrade`（可設為 Render 的 Pre-Deploy Command）。
+
 ## 測試
+
+本機測試叢集需有 Supabase 的 API 角色，REQ-51 的權限封鎖測試才會實際執行（沒有則略過）：
+
+```powershell
+& "$PG\psql.exe" -U postgres -h 127.0.0.1 -p 5433 -c "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;"
+```
 
 ```bash
 # 對照上方「本機開發設置」使用的 PostgreSQL 位置調整連線字串

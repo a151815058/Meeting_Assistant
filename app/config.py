@@ -1,12 +1,39 @@
 import os
 
+from sqlalchemy.engine import URL
+
+
+def supabase_database_url(env=os.environ) -> str | None:
+    """Connection string for a Supabase Postgres database (REQ-50), or None when SUPABASE_DB_HOST is unset.
+
+    Built from separate fields so passwords with special characters need no manual URL-escaping.
+    """
+    host = env.get("SUPABASE_DB_HOST", "").strip()
+    if not host:
+        return None
+    url = URL.create(
+        "postgresql+psycopg2",
+        username=env.get("SUPABASE_DB_USER", "postgres").strip(),
+        password=env.get("SUPABASE_DB_PASSWORD", ""),
+        host=host,
+        port=int(env.get("SUPABASE_DB_PORT", 5432)),
+        database=env.get("SUPABASE_DB_NAME", "postgres").strip(),
+        query={"sslmode": env.get("SUPABASE_DB_SSLMODE", "require").strip()},
+    )
+    return url.render_as_string(hide_password=False)
+
 
 class BaseConfig:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
+    # Supabase settings take precedence over DATABASE_URL when SUPABASE_DB_HOST is set.
+    SUPABASE_ENABLED = bool(os.environ.get("SUPABASE_DB_HOST", "").strip())
+    SUPABASE_DB_SSLMODE = os.environ.get("SUPABASE_DB_SSLMODE", "require").strip()
+    SQLALCHEMY_DATABASE_URI = supabase_database_url() or os.environ.get(
         "DATABASE_URL",
         "postgresql+psycopg2://meeting_assistant:meeting_assistant@localhost:5432/meeting_assistant",
     )
+    # A remote database / pooler closes idle connections; check each pooled connection before use.
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True} if SUPABASE_ENABLED else {}
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -90,6 +117,10 @@ class BaseConfig:
     # (Windows Microsoft JhengHei, or fonts-noto-cjk on Debian/Ubuntu — see Dockerfile).
     PDF_FONT_PATH = os.environ.get("PDF_FONT_PATH", "")
     PDF_BOLD_FONT_PATH = os.environ.get("PDF_BOLD_FONT_PATH", "")
+
+    # Reverse proxies in front of the app that add X-Forwarded-For/-Proto/-Host (REQ-52), e.g. 1 on
+    # Render. 0 = no proxy: the headers are ignored, since a client could otherwise forge its IP / scheme.
+    TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", 0))
 
     WTF_CSRF_ENABLED = True
     # Passwordless login for local testing without OAuth credentials (REQ-29).
