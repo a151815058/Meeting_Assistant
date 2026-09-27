@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}會議小助手 Meeting Assistant{% endblock %}
+
+{% block extra_head %}
+<style>
+  .home-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2rem; align-items: center; margin-top: 1rem; }
+  .home-visual {
+    aspect-ratio: 3 / 2;
+    background: url("{{ url_for('static', filename='pic/background.png') }}") center / cover no-repeat;
+    -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%);
+            mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 55%, transparent 100%);
+  }
+  .home-hero h1 { font-size: 2rem; margin: 0 0 .75rem; }
+  .home-hero p { line-height: 1.7; }
+  .features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 2rem 0; }
+  .feature { background: rgba(20, 44, 92, 0.55); border: 1px solid rgba(120, 180, 255, 0.25); border-radius: 12px; padding: 1rem 1.25rem; }
+  .feature h2 { font-size: 1.05rem; margin: 0 0 .4rem; }
+  .feature p { margin: 0; line-height: 1.6; font-size: .95rem; }
+  .data-use { line-height: 1.7; }
+  @media (max-width: 760px) {
+    .home-hero, .features { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+  <section class="home-hero">
+    <div>
+      <h1>會議小助手</h1>
+      <p>會議小助手協助您記錄線上會議：即時將會議語音轉成逐字稿、依範本以 AI 整理成會議記錄，
+        並以您本人的 Google 或 Microsoft 帳號寄給所有與會者。</p>
+      <div class="btn-row">
+        <a class="btn btn-lg" href="{{ url_for('auth.login') }}">登入開始使用</a>
+      </div>
+    </div>
+    <div class="home-visual" role="img" aria-label="會議小助手機器人介紹圖"></div>
+  </section>
+
+  <section class="features" aria-label="主要功能">
+    <div class="feature">
+      <h2>即時錄音轉文字</h2>
+      <p>在瀏覽器錄下會議聲音，伺服器即時轉成逐字稿；也可上傳錄音檔。原始錄音不會保存。</p>
+    </div>
+    <div class="feature">
+      <h2>同步行事曆與會者</h2>
+      <p>從您的行事曆選擇會議，自動帶入會議時間、標題與與會者名單。</p>
+    </div>
+    <div class="feature">
+      <h2>AI 產製會議記錄</h2>
+      <p>依您自訂的範本整理決議、待辦事項、負責人與期限，產生後可再修改確認。</p>
+    </div>
+    <div class="feature">
+      <h2>寄送會議記錄</h2>
+      <p>確認內容後，一鍵以您本人的帳號寄給與會者，可附加 Word／PDF 檔。</p>
+    </div>
+  </section>
+
+  <section class="data-use">
+    <h2>我們如何使用您的 Google 帳號資料</h2>
+    <p>登入時，會議小助手會請求以下權限，僅用於上述功能：</p>
+    <ul>
+      <li><strong>基本資料（Email、名稱）</strong>：建立並識別您的帳號。</li>
+      <li><strong>行事曆（唯讀）</strong>：列出您的會議，並帶入會議時間、標題與與會者名單。不會修改您的行事曆。</li>
+      <li><strong>Gmail 寄信</strong>：僅在您按下「寄出會議記錄」時，以您的帳號寄出會議記錄。不會讀取您的信件。</li>
+    </ul>
+    <p>詳細說明請見<a href="{{ url_for('public.privacy') }}">隱私權政策</a>。</p>
+  </section>
+{% endblock %}

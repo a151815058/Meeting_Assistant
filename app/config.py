@@ -122,6 +122,11 @@ class BaseConfig:
     # Render. 0 = no proxy: the headers are ignored, since a client could otherwise forge its IP / scheme.
     TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", 0))
 
+    # Public pages (REQ-55 / REQ-56): contact shown on the privacy policy, and the token from Google
+    # Search Console's "HTML tag" method that proves ownership of the site for OAuth brand verification.
+    PRIVACY_CONTACT_EMAIL = os.environ.get("PRIVACY_CONTACT_EMAIL", "")
+    GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()
+
     WTF_CSRF_ENABLED = True
     # Passwordless login for local testing without OAuth credentials (REQ-29).
     # Only DevelopmentConfig turns it on; create_app refuses to start with it in production.

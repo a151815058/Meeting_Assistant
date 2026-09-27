@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}隱私權政策 - 會議小助手{% endblock %}
+
+{% block extra_head %}
+<style>
+  .policy { line-height: 1.75; }
+  .policy h1 { margin-bottom: .25rem; }
+  .policy h2 { margin-top: 2rem; font-size: 1.2rem; }
+  .policy .updated { color: #9fb6dc; margin-top: 0; }
+  .policy table { margin: .5rem 0 1rem; }
+  .policy th, .policy td { vertical-align: top; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set contact = config.PRIVACY_CONTACT_EMAIL %}
+<article class="policy">
+  <h1>隱私權政策</h1>
+  <p class="updated">生效日期：2026 年 9 月 27 日</p>
+
+  <p>會議小助手（以下稱「本服務」）由會議小助手團隊（以下稱「我們」）營運。本政策說明本服務收集哪些資料、
+    如何使用與分享，以及您如何管理或刪除這些資料。使用本服務即表示您同意本政策。</p>
+
+  <h2>1. 我們收集的資料</h2>
+  <table>
+    <thead><tr><th>資料</th><th>來源</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td>Email、名稱、帳號識別碼</td><td>您登入的 Google 或 Microsoft 帳號</td><td>建立與識別您的帳號</td></tr>
+      <tr><td>行事曆會議的標題、時間、與會者名稱與 Email</td><td>Google 日曆（唯讀）或 Microsoft Outlook 行事曆（唯讀）</td><td>讓您選擇會議並帶入會議資訊與與會者名單</td></tr>
+      <tr><td>寄信授權</td><td>Gmail 寄信權限或 Microsoft Mail.Send</td><td>在您按下「寄出會議記錄」時，以您的帳號寄給與會者</td></tr>
+      <tr><td>會議逐字稿</td><td>您在本服務錄音或上傳的錄音檔，由伺服器轉成文字</td><td>保存會議內容並產生會議記錄</td></tr>
+      <tr><td>會議記錄、會議記錄範本、手動新增的與會者</td><td>您在本服務輸入或產生</td><td>會議記錄的編輯、匯出與寄送</td></tr>
+      <tr><td>登入授權憑證（refresh token）</td><td>Google 或 Microsoft 在您同意授權後提供</td><td>讓本服務代表您存取行事曆與寄信，不需每次重新登入</td></tr>
+      <tr><td>操作紀錄（誰、做了什麼、時間）</td><td>本服務自動記錄</td><td>安全稽核，例如錄音、產生與寄送會議記錄</td></tr>
+    </tbody>
+  </table>
+  <p><strong>我們不保存原始錄音。</strong>即時錄音只在伺服器記憶體中分段處理，轉成文字後即捨棄；上傳的錄音檔在轉錄完成（或失敗）後立即刪除。
+    我們不會讀取您的 Gmail 或 Outlook 信件，也不會修改您的行事曆。</p>
+
+  <h2>2. Google 使用者資料</h2>
+  <p>本服務向 Google 請求以下權限：</p>
+  <ul>
+    <li><code>openid</code>、<code>userinfo.email</code>、<code>userinfo.profile</code>：取得您的 Email 與名稱以建立帳號。</li>
+    <li><code>calendar.readonly</code>：唯讀讀取您的行事曆會議（標題、時間、與會者），用於建立會議與同步與會者名單。</li>
+    <li><code>gmail.send</code>：僅用於在您操作時，以您的帳號寄出會議記錄；無法讀取您的信件。</li>
+  </ul>
+  <p>會議小助手對從 Google API 取得之資訊的使用與傳輸，將遵守
+    <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener" target="_blank">Google API 服務使用者資料政策</a>，
+    包括其中的「有限使用（Limited Use）」規定。具體而言：</p>
+  <ul>
+    <li>Google 使用者資料只用於提供或改善本頁所述、您看得到的功能。</li>
+    <li>除提供上述功能所必需、遵守法律，或經您明確同意外，我們不會將 Google 使用者資料移轉給他人。</li>
+    <li>我們不會將 Google 使用者資料用於廣告，也不會出售。</li>
+    <li>我們不會使用 Google 使用者資料來開發、改進或訓練通用的人工智慧或機器學習模型。</li>
+    <li>除非經您明確同意、為安全目的（例如調查濫用）、遵守法律，或資料已彙總匿名化以供內部營運，否則任何人都不會閱讀這些資料。</li>
+  </ul>
+
+  <h2>3. 與第三方分享</h2>
+  <p>我們不出售您的資料，也不與廣告商分享。為提供本服務，以下服務供應商會處理您的資料：</p>
+  <ul>
+    <li><strong>Anthropic（Claude AI）</strong>：當您產生會議記錄時，會議逐字稿、會議標題與日期、與會者名稱與 Email，以及您選用的範本會傳送至 Anthropic API，
+      僅用於產生該份會議記錄。</li>
+    <li><strong>Render</strong>：本服務的應用程式伺服器（新加坡區域），負責語音轉文字與網站運作。</li>
+    <li><strong>Supabase</strong>：本服務的資料庫（日本東京區域），儲存上述第 1 節的資料。</li>
+    <li><strong>Google／Microsoft</strong>：您寄出會議記錄時，信件經由您本人帳號的 Gmail 或 Microsoft 郵件服務寄出。</li>
+  </ul>
+  <p>若法律要求，或為保護本服務與使用者的安全，我們可能依法提供必要的資料。</p>
+
+  <h2>4. 資料保存與刪除</h2>
+  <p>您的帳號資料、會議、逐字稿與會議記錄會保存至您要求刪除為止。您可以隨時要求刪除您的帳號與所有相關資料（包括授權憑證）：
+    {% if contact %}請寄信至 <a href="mailto:{{ contact }}">{{ contact }}</a>，{% else %}請透過本頁下方的聯絡方式與我們聯繫，{% endif %}
+    我們會在確認您的身分後 30 天內完成刪除。</p>
+  <p>您也可以隨時撤銷本服務存取您帳號的權限，撤銷後本服務將無法再讀取您的行事曆或代您寄信：</p>
+  <ul>
+    <li>Google：<a href="https://myaccount.google.com/permissions" rel="noopener" target="_blank">Google 帳戶「第三方應用程式和服務」</a></li>
+    <li>Microsoft：<a href="https://account.microsoft.com/privacy/app-access" rel="noopener" target="_blank">Microsoft 帳戶「應用程式存取權」</a></li>
+  </ul>
+
+  <h2>5. 資料安全</h2>
+  <ul>
+    <li>網站全程使用 HTTPS 加密連線；伺服器與資料庫之間也使用加密連線。</li>
+    <li>登入授權憑證（refresh token）以加密形式儲存。</li>
+    <li>會議、逐字稿與會議記錄只有會議的主辦人可以存取。</li>
+    <li>重要操作會留下稽核紀錄。</li>
+  </ul>
+
+  <h2>6. Cookie</h2>
+  <p>本服務只使用維持登入狀態所需的 Cookie，不使用追蹤或廣告 Cookie，也不使用第三方分析工具。</p>
+
+  <h2>7. 兒童隱私</h2>
+  <p>本服務供處理工作會議使用，並非針對 13 歲以下兒童設計，我們不會在知情的情況下收集兒童的個人資料。</p>
+
+  <h2>8. 政策變更</h2>
+  <p>我們可能更新本政策，更新後會修改本頁上方的生效日期；如有重大變更，會在本服務中通知您。</p>
+
+  <h2>9. 聯絡我們</h2>
+  <p>如對本政策或您的資料有任何問題，請聯絡會議小助手團隊{% if contact %}：<a href="mailto:{{ contact }}">{{ contact }}</a>{% endif %}。</p>
+</article>
+{% endblock %}

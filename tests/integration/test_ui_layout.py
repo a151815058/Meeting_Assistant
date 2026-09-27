@@ -37,11 +37,16 @@ def _nav(html: str) -> str:
     return html[html.index("<nav>"):html.index("</nav>")]
 
 
-def test_site_root_sends_anonymous_users_to_login(client):
-    """TC-53: 網站根網址不回 404：未登入經會議列表導向登入頁。"""
+def test_site_root_is_public_homepage_for_anonymous_users(client):
+    """TC-53／TC-55: 網站根網址不回 404；未登入時為公開首頁（不需登入、說明功能、連到登入與隱私權政策）。"""
     resp = client.get("/")
-    assert resp.status_code == 302 and resp.headers["Location"] == "/meetings/"
-    assert client.get("/", follow_redirects=True).request.path == "/auth/login"
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "<h1>會議小助手</h1>" in html
+    for feature in ("即時錄音轉文字", "同步行事曆與會者", "AI 產製會議記錄", "寄送會議記錄"):
+        assert feature in html
+    assert 'href="/auth/login"' in html
+    assert 'href="/privacy"' in html
 
 
 def test_login_redirect_shows_no_please_log_in_notice(client):
@@ -65,6 +70,40 @@ def test_site_root_shows_meetings_when_signed_in(client, app, db):
         sess["_fresh"] = True
     resp = client.get("/", follow_redirects=True)
     assert resp.status_code == 200 and resp.request.path == "/meetings/"
+
+
+def test_privacy_policy_is_public_and_covers_google_review_items(client, app):
+    """TC-55: 隱私權政策不需登入即可閱讀，涵蓋 Google 審查項目：收集資料、Google 權限、有限使用、第三方、保存刪除、撤銷授權、聯絡方式。"""
+    app.config["PRIVACY_CONTACT_EMAIL"] = "privacy@example.com"
+    resp = client.get("/privacy")
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    for scope in ("calendar.readonly", "gmail.send", "userinfo.email"):
+        assert scope in html
+    assert "https://developers.google.com/terms/api-services-user-data-policy" in html
+    assert "有限使用（Limited Use）" in html
+    assert "訓練通用的人工智慧或機器學習模型" in html
+    assert "Anthropic" in html and "Supabase" in html and "Render" in html
+    assert "不保存原始錄音" in html
+    assert "https://myaccount.google.com/permissions" in html
+    assert 'href="mailto:privacy@example.com"' in html
+
+
+def test_every_page_links_to_privacy_policy(client):
+    """TC-55: 所有頁面頁尾皆有首頁與隱私權政策連結（含登入頁）。"""
+    for path in ("/", "/auth/login", "/privacy"):
+        html = client.get(path).get_data(as_text=True)
+        footer = html[html.index('<footer class="site-footer">'):]
+        assert 'href="/privacy"' in footer and 'href="/"' in footer, path
+
+
+def test_google_site_verification_meta_tag_only_when_configured(client, app):
+    """TC-56: 設定 GOOGLE_SITE_VERIFICATION 時首頁輸出 Search Console 驗證 meta 標籤（內容經跳脫），未設定則不輸出。"""
+    assert "google-site-verification" not in client.get("/").get_data(as_text=True)
+
+    app.config["GOOGLE_SITE_VERIFICATION"] = 'abc123_XYZ"><script>'
+    html = client.get("/").get_data(as_text=True)
+    assert '<meta name="google-site-verification" content="abc123_XYZ&#34;&gt;&lt;script&gt;">' in html
 
 
 def test_header_links_are_buttons_and_mark_current_page(client, app, db):

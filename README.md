@@ -160,6 +160,14 @@ python run.py
 - 方案需至少約 2 GB 記憶體（`plan: standard`），且只能有 1 個 instance（錄音狀態在記憶體）。不需要 Redis。
 - 資料表變更：之後有新的 migration 時執行 `flask db upgrade`（可設為 Render 的 Pre-Deploy Command）。
 
+### Google OAuth 品牌驗證
+
+- 公開首頁 `/` 與隱私權政策 `/privacy` 不需登入；隱私權政策的聯絡信箱由 `PRIVACY_CONTACT_EMAIL` 設定。
+- 網站擁有權：在 [Google Search Console](https://search.google.com/search-console) 新增「網址前置字元」資源 `https://<服務名稱>.onrender.com/`，
+  驗證方式選「HTML 標記」，把 `content="..."` 裡的值填入 Render 環境變數 `GOOGLE_SITE_VERIFICATION`，重新部署後按「驗證」。
+  Search Console 帳號須與 Google Cloud 專案擁有者為同一個 Google 帳號。
+- OAuth 同意畫面：應用程式首頁填 `https://<服務名稱>.onrender.com/`、隱私權政策填 `https://<服務名稱>.onrender.com/privacy`。
+
 ## 測試
 
 本機測試叢集需有 Supabase 的 API 角色，REQ-51 的權限封鎖測試才會實際執行（沒有則略過）：
