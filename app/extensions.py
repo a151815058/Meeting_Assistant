@@ -15,6 +15,8 @@ csrf = CSRFProtect()
 celery = Celery(__name__)
 
 login_manager.login_view = "auth.login"
+# No "Please log in to access this page." notice when redirected to the login page (REQ-54)
+login_manager.login_message = None
 
 
 def init_celery(app):

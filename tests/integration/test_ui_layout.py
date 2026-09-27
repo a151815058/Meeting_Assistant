@@ -44,6 +44,15 @@ def test_site_root_sends_anonymous_users_to_login(client):
     assert client.get("/", follow_redirects=True).request.path == "/auth/login"
 
 
+def test_login_redirect_shows_no_please_log_in_notice(client):
+    """TC-54: 未登入被導向登入頁時，不顯示「Please log in to access this page.」提示。"""
+    resp = client.get("/meetings/", follow_redirects=True)
+    assert resp.request.path == "/auth/login"
+    html = resp.get_data(as_text=True)
+    assert "Please log in" not in html
+    assert 'class="flash' not in html
+
+
 def test_site_root_shows_meetings_when_signed_in(client, app, db):
     """TC-53: 已登入時網站根網址導向會議列表。"""
     with app.app_context():
