@@ -91,6 +91,29 @@
   </section>
   {% endif %}
 
+  {% if minutes and knowledge_enabled and not (job and job.state == 'running') %}
+  <section class="panel" id="knowledge">
+    <h2>知識庫</h2>
+    {% if knowledge_running or (knowledge and knowledge.status in ('pending', 'indexing')) %}
+      <p><span class="spinner"></span>正在把已儲存的會議記錄寫入知識庫…（重新整理頁面可查看結果）</p>
+    {% elif knowledge and knowledge.status == 'indexed' %}
+      <p>已寫入知識庫（{{ knowledge.chunk_count }} 個段落，{{ knowledge.indexed_at|localtime }}），之後可用於查詢歷史會議。</p>
+      {% if knowledge.summary_error %}<p class="warn">AI 重點摘要產生失敗，僅以會議記錄全文建立索引；可稍後重建。</p>{% endif %}
+    {% elif knowledge and knowledge.status == 'failed' %}
+      <p class="warn">寫入知識庫失敗：{{ knowledge_error }}</p>
+    {% else %}
+      <p>這份會議記錄尚未寫入知識庫。</p>
+    {% endif %}
+    {% if not knowledge_running %}
+      <form method="post" action="{{ url_for('minutes.knowledge_reindex', meeting_id=meeting.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-secondary" type="submit">{{ '重建知識庫索引' if knowledge else '寫入知識庫' }}</button>
+      </form>
+    {% endif %}
+    <p class="meta">會議記錄產生或儲存修改後會自動更新知識庫，內容為<strong>已儲存</strong>的版本。</p>
+  </section>
+  {% endif %}
+
   {% if not (job and job.state == 'running') %}
   <section class="panel">
     <h2>{{ '重新產生' if minutes else '產生會議記錄' }}</h2>

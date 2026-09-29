@@ -5,6 +5,7 @@ from flask_login import current_user, login_required
 from marshmallow import ValidationError
 
 from app.extensions import db
+from app.knowledge import indexer
 from app.minutes import export, generator, minutes_bp, prompting
 from app.minutes.schemas import MinutesEditSchema, TemplateSchema, load_form
 from app.models.audit import AuditLog
@@ -53,6 +54,14 @@ MAIL_ERROR_MESSAGES = {
 
 EXPORT_ERROR_MESSAGES = {
     "pdf_font_missing": "伺服器找不到中文字型，無法產生 PDF（請設定 PDF_FONT_PATH），可先改用 Word 格式",
+}
+
+KNOWLEDGE_ERROR_MESSAGES = {
+    "empty_minutes": "會議記錄沒有內容，無法建立知識庫索引",
+    "model_unavailable": "無法載入向量模型（首次使用需連線 Hugging Face 下載），請查看伺服器紀錄",
+    "not_configured": "向量模型設定錯誤（EMBEDDING_PROVIDER），請查看伺服器紀錄",
+    "dimension_mismatch": "向量模型維度與資料庫不符，請確認 EMBEDDING_* 設定",
+    "internal_error": "建立知識庫索引時發生錯誤，請查看伺服器紀錄",
 }
 
 BACKEND_LABELS = {
@@ -211,6 +220,8 @@ def minutes_view(meeting_id):
         record_audit_event(actor_user_id=current_user.id, action="minutes.edited", target_type="meeting",
                            target_id=meeting.id, metadata={"chars": len(data["content_markdown"])})
         flash("會議記錄已儲存", "success")
+        # The saved version is the one sent and searched: refresh the knowledge base (REQ-58).
+        indexer.schedule_index(current_app._get_current_object(), meeting.id, current_user.id)
         return redirect(url_for("minutes.minutes_view", meeting_id=meeting.id))
 
     job = generator.get_job(meeting.id)
@@ -223,7 +234,26 @@ def minutes_view(meeting_id):
                            error_message=ERROR_MESSAGES.get(job.error, job.error) if job and job.error else None,
                            recipients=recipients, skipped=skipped, last_send=last_send,
                            backend=backend, backend_label=BACKEND_LABELS.get(backend),
-                           max_recipients=current_app.config["MAIL_MAX_RECIPIENTS"])
+                           max_recipients=current_app.config["MAIL_MAX_RECIPIENTS"],
+                           knowledge_enabled=current_app.config["KNOWLEDGE_ENABLED"],
+                           knowledge=meeting.knowledge, knowledge_running=indexer.is_indexing(meeting.id),
+                           knowledge_error=KNOWLEDGE_ERROR_MESSAGES.get(
+                               meeting.knowledge.error, meeting.knowledge.error) if meeting.knowledge else None)
+
+
+@minutes_bp.route("/meetings/<meeting_id>/knowledge/reindex", methods=["POST"])
+@login_required
+def knowledge_reindex(meeting_id):
+    """Rebuild the meeting's knowledge-base entry (REQ-60), e.g. after a failure."""
+    meeting = _own_meeting(meeting_id)
+    if meeting.minutes is None:
+        abort(404)
+    if not current_app.config["KNOWLEDGE_ENABLED"]:
+        flash("知識庫功能未啟用（KNOWLEDGE_ENABLED）", "error")
+    else:
+        indexer.schedule_index(current_app._get_current_object(), meeting.id, current_user.id, force=True)
+        flash("已開始重建知識庫索引", "success")
+    return redirect(url_for("minutes.minutes_view", meeting_id=meeting.id))
 
 
 # --- sending (REQ-15 ~ REQ-17) ------------------------------------------------------------

@@ -10,6 +10,7 @@ AI 會議記錄產製、自動寄送。依 SSDLC（Secure Software Development L
 2. 串接 Google Meet / Microsoft Teams 取得與會者名單，並以語者分離標記發言片段
 3. 會議結束後依可自訂範本，由 LLM（預設 Anthropic Claude，介面可抽換）自動產製會議記錄
 4. 會議記錄透過 Gmail API / Microsoft Graph Mail API 自動寄送給所有與會者
+5. 知識庫：會議記錄自動切片、向量化存入 PostgreSQL（pgvector），並建立會議名稱、與會者、AI 重點摘要等 metadata（第一階段；問答介面開發中）
 
 ## 專案文件（SSDLC 交付物）
 
@@ -41,6 +42,15 @@ AI 會議記錄產製、自動寄送。依 SSDLC（Secure Software Development L
   連線中斷時不會自動重試（信件可能已寄出），請先確認寄件備份。
 - 開發模式登入的帳號沒有寄信權限，此時信件會寫入本機信箱 `instance/outbox/*.eml`（可用 Outlook／記事本開啟），
   不會真的寄出。正式環境一律關閉；若在正式設定中開啟 `MAIL_OUTBOX_ENABLED`，應用程式會拒絕啟動。
+
+### 知識庫（REQ-58 ~ REQ-61，第一階段：寫入向量資料庫）
+
+- 會議記錄產生完成、以及在會議記錄頁「儲存修改」後，會在背景把**已儲存**的會議記錄寫入知識庫：
+  依章節切成約 400 字的段落，以本機模型 `intfloat/multilingual-e5-small`（約 120 MB，第一次使用時自動從 Hugging Face 下載）轉成向量，存入 PostgreSQL 的 pgvector。
+- 同時建立 metadata：會議名稱、日期、平台、主辦人、與會者姓名與 Email，以及由 AI 產生的會議摘要、討論重點、決議、待辦、關鍵字（會多呼叫一次 LLM，`KNOWLEDGE_SUMMARY_MODEL` 可改用較便宜的模型）。
+- 會議記錄頁下方的「知識庫」區塊顯示狀態；失敗時可按「重建知識庫索引」。寫入失敗不影響會議記錄本身。
+- 為既有會議記錄回填、或重試失敗：`flask knowledge reindex --failed`（`--all` 全部、`--meeting <ID>` 指定會議、`--force` 內容未變也重建）。
+- 不需要時可在 `.env` 設定 `KNOWLEDGE_ENABLED=false`。
 
 ### AI 會議記錄（Phase 4）使用說明
 
@@ -104,6 +114,29 @@ $PG = "C:\Program Files\PostgreSQL\17\bin"
 & "$PG\psql.exe" -U postgres -h 127.0.0.1 -p 5433 -c "CREATE DATABASE meeting_assistant OWNER meeting_assistant;"
 & "$PG\psql.exe" -U postgres -h 127.0.0.1 -p 5433 -c "CREATE DATABASE meeting_assistant_test OWNER meeting_assistant;"
 ```
+
+**安裝 pgvector（知識庫需要，REQ-61）**：Supabase 已內建，`flask db upgrade` 會自動建立。
+本機的 PostgreSQL 17 沒有 pgvector，而且沒有系統管理員權限無法裝進 `C:\Program Files`，
+因此複製一份 PostgreSQL 執行檔到 `.devdb\pgsql`，放入 pgvector 的 Windows 預先編譯版
+（pgvector 官方未提供 Windows 執行檔，這裡用社群建置 [andreiramani/pgvector_pgsql_windows](https://github.com/andreiramani/pgvector_pgsql_windows) 的 `vector.v0.8.6-pg17.zip`），
+再用這份執行檔啟動原本的資料庫叢集（資料不受影響）：
+
+```powershell
+$PG = "C:\Program Files\PostgreSQL\17"
+New-Item -ItemType Directory -Force .devdb\pgsql | Out-Null
+Copy-Item -Recurse "$PG\bin", "$PG\lib", "$PG\share" .devdb\pgsql
+# 解壓 vector.v0.8.6-pg17.zip 後：
+Copy-Item <解壓目錄>\lib\vector.dll .devdb\pgsql\lib
+Copy-Item <解壓目錄>\share\extension\vector* .devdb\pgsql\share\extension
+
+& "$PG\bin\pg_ctl.exe" -D .devdb\pgdata stop
+& .devdb\pgsql\bin\pg_ctl.exe -D .devdb\pgdata -o "-p 5433" -l .devdb\log\postgres.log start
+# pgvector 不是 trusted extension，須由 postgres 超級使用者建立一次
+& .devdb\pgsql\bin\psql.exe -U postgres -h 127.0.0.1 -p 5433 -d meeting_assistant -c "CREATE EXTENSION IF NOT EXISTS vector;"
+& .devdb\pgsql\bin\psql.exe -U postgres -h 127.0.0.1 -p 5433 -d meeting_assistant_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+之後啟動／停止本機資料庫一律改用 `.devdb\pgsql\bin\pg_ctl.exe`。
 
 `.env` 的 `DATABASE_URL` 對應改成 `postgresql+psycopg2://meeting_assistant:meeting_assistant@localhost:5433/meeting_assistant`。
 停止此實例：`& "$PG\pg_ctl.exe" -D ".devdb\pgdata" stop`；下次要用時重新

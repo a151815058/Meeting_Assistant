@@ -2,6 +2,7 @@ from app.models.user import User, OAuthAccount
 from app.models.meeting import Meeting, Participant, TranscriptSegment
 from app.models.template import MinutesTemplate, Minutes
 from app.models.audit import AuditLog
+from app.models.knowledge import MeetingKnowledge, MeetingKnowledgeChunk
 
 __all__ = [
     "User",
@@ -12,4 +13,6 @@ __all__ = [
     "MinutesTemplate",
     "Minutes",
     "AuditLog",
+    "MeetingKnowledge",
+    "MeetingKnowledgeChunk",
 ]

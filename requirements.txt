@@ -12,6 +12,8 @@ gunicorn==22.0.0
 
 # Database
 psycopg2-binary==2.9.9
+# Knowledge base vectors (REQ-58): the database needs the pgvector extension
+pgvector==0.4.1
 SQLAlchemy==2.0.31
 
 # Background jobs

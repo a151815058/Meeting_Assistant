@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 from app.background import run_blocking, spawn
 from app.extensions import db
+from app.knowledge import indexer
 from app.minutes import prompting
 from app.minutes.providers import LLMError, get_provider
 from app.models.meeting import Meeting
@@ -110,6 +111,9 @@ def _run_job(app, meeting_id: str, template_id: str | None, user_id: str, previo
             record_audit_event(actor_user_id=user_id, action="minutes.generation_failed",
                                target_type="meeting", target_id=meeting_id, metadata={"error": code})
             job.state, job.error = "failed", code
+            return
+    # Knowledge base (REQ-58): a separate job, so its failure never touches the minutes.
+    indexer.schedule_index(app, meeting_id, user_id)
 
 
 def generate_minutes(app, meeting: Meeting, template: MinutesTemplate | None, job: Job | None = None) -> Minutes:

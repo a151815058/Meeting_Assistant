@@ -74,6 +74,25 @@ class BaseConfig:
     MINUTES_CHUNK_TOKENS = int(os.environ.get("MINUTES_CHUNK_TOKENS", 150_000))
     MINUTES_INLINE = False  # True = generate synchronously inside the request (tests only)
 
+    # Knowledge base (REQ-58 ~ REQ-60): saved minutes are chunked, embedded and stored in pgvector
+    # together with meeting metadata and an AI summary, for later Q&A over past meetings.
+    KNOWLEDGE_ENABLED = os.environ.get("KNOWLEDGE_ENABLED", "true").lower() == "true"
+    KNOWLEDGE_INLINE = False  # True = index synchronously inside the request (tests only)
+    KNOWLEDGE_CHUNK_CHARS = int(os.environ.get("KNOWLEDGE_CHUNK_CHARS", 400))
+    KNOWLEDGE_CHUNK_OVERLAP = int(os.environ.get("KNOWLEDGE_CHUNK_OVERLAP", 60))
+    # The summary metadata is one extra LLM call per indexed version; empty model = LLM_MODEL.
+    KNOWLEDGE_SUMMARY_MODEL = os.environ.get("KNOWLEDGE_SUMMARY_MODEL", "")
+    KNOWLEDGE_SUMMARY_EFFORT = os.environ.get("KNOWLEDGE_SUMMARY_EFFORT", "medium")
+    # Local ONNX embedding model (no torch, no third-party API). Changing it requires a migration
+    # when the dimension differs (the pgvector column is vector(384)) and a full reindex.
+    EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "e5_onnx")
+    EMBEDDING_MODEL_REPO = os.environ.get("EMBEDDING_MODEL_REPO", "intfloat/multilingual-e5-small")
+    EMBEDDING_MODEL_REVISION = os.environ.get("EMBEDDING_MODEL_REVISION", "614241f622f53c4eeff9890bdc4f31cfecc418b3")
+    EMBEDDING_ONNX_FILE = os.environ.get("EMBEDDING_ONNX_FILE", "onnx/model_qint8_avx512_vnni.onnx")
+    EMBEDDING_TOKENIZER_FILE = os.environ.get("EMBEDDING_TOKENIZER_FILE", "onnx/tokenizer.json")
+    EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", 16))
+    EMBEDDING_CPU_THREADS = int(os.environ.get("EMBEDDING_CPU_THREADS", 2))
+
     # "small" keeps up with real time on a typical CPU; "medium" is more accurate but ~3x slower
     # than real time on CPU (see docs/architecture/architecture.md benchmark) — use it only with a GPU.
     WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "small")
@@ -156,6 +175,9 @@ class TestingConfig(BaseConfig):
     MINUTES_INLINE = True
     MAIL_INLINE = True
     MAIL_RETRY_BACKOFF_SECONDS = 0
+    # Off by default so other suites never load the embedding model; knowledge tests switch it on.
+    KNOWLEDGE_ENABLED = False
+    KNOWLEDGE_INLINE = True
     SOCKETIO_MESSAGE_QUEUE = None
     DIARIZATION_ENABLED = False
     SQLALCHEMY_DATABASE_URI = os.environ.get(

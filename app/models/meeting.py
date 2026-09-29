@@ -40,6 +40,8 @@ class Meeting(db.Model):
         order_by="TranscriptSegment.start_ms",
     )
     minutes = db.relationship("Minutes", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
+    knowledge = db.relationship("MeetingKnowledge", back_populates="meeting", uselist=False,
+                                cascade="all, delete-orphan", passive_deletes=True)
 
     def __repr__(self) -> str:
         return f"<Meeting {self.title!r} ({self.platform})>"

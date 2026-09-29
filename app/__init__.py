@@ -52,6 +52,10 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(minutes_bp)
     app.register_blueprint(public_bp)
 
+    from app import knowledge
+
+    knowledge.register(app)
+
     from app.transcription import register_socketio_handlers
 
     register_socketio_handlers(socketio)
