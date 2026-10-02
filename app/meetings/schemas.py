@@ -16,3 +16,7 @@ class MeetingSchema(Schema):
 class ParticipantSchema(Schema):
     email = fields.Email(required=True, validate=validate.Length(max=255))
     display_name = fields.String(load_default="", validate=validate.Length(max=255))
+
+
+class ParticipantNameSchema(Schema):
+    display_name = fields.String(required=True, validate=validate.Length(min=1, max=255))

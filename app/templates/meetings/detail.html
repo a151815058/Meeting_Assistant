@@ -10,6 +10,10 @@
   .hint { font-size: .9rem; opacity: .75; }
   .btn-small { padding: .25rem .6rem; font-size: .85rem; box-shadow: none; background: rgba(255, 255, 255, 0.12); }
   .btn-small:hover { background: #c5221f; }
+  .btn-small.btn-save:hover { background: #2b84f5; }
+  .project-form, .name-form { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .project-form select { max-width: 100%; }
+  .name-form input { flex: 1; min-width: 8rem; }
   .add-participant { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
   /* 頁籤：分隔「即時錄音轉文字」「會議記錄」「與會人員」 */
   .tabs { display: flex; gap: .25rem; border-bottom: 1px solid rgba(140, 196, 255, 0.35); margin: 1.5rem 0 0; flex-wrap: wrap; }
@@ -40,6 +44,19 @@
     data-label-transcribing="{{ 'transcribing'|meeting_status }}"
     data-label-transcribed="{{ 'transcribed'|meeting_status }}">{{ meeting.status|meeting_status }}</span>
     {% if meeting.scheduled_start %} ・ 時間：{{ meeting.scheduled_start|localtime('%Y-%m-%d（%W）%H:%M') }}{% if meeting.scheduled_end %}–{{ meeting.scheduled_end|localtime('%H:%M') }}{% endif %}{% endif %}</p>
+
+  <form class="project-form" method="post" action="{{ url_for('meetings.set_project', meeting_id=meeting.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="meeting-project">專案</label>
+    <select name="project_id" id="meeting-project">
+      <option value="">— 不屬於任何專案 —</option>
+      {% for p in projects %}
+        <option value="{{ p.id }}" {% if meeting.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="btn btn-small btn-save" type="submit">變更專案</button>
+    {% if not projects %}<a class="hint" href="{{ url_for('projects.project_list') }}">到專案管理新增專案</a>{% endif %}
+  </form>
 
   <div class="tabs" role="tablist" aria-label="會議內容">
     <button class="tab" type="button" role="tab" id="tab-live" aria-controls="panel-live" aria-selected="true">即時錄音轉文字</button>
@@ -128,7 +145,13 @@
       <tbody>
       {% for p in meeting.participants %}
         <tr>
-          <td>{{ p.display_name }}</td>
+          <td>
+            <form class="name-form" method="post" action="{{ url_for('meetings.rename_participant', meeting_id=meeting.id, participant_id=p.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="text" name="display_name" value="{{ p.display_name or '' }}" required maxlength="255" aria-label="{{ p.email }} 的姓名">
+              <button class="btn btn-small btn-save" type="submit" aria-label="儲存 {{ p.email }} 的姓名">儲存</button>
+            </form>
+          </td>
           <td>{{ p.email }}</td>
           <td>{{ p.response_status }}</td>
           <td>{{ '是' if p.is_organizer else '' }}</td>
@@ -152,6 +175,7 @@
       <button class="btn" type="submit">新增與會者</button>
     </form>
     <p class="hint">會議記錄只會寄給這份名單上的人（不含主辦人本人）。</p>
+    <p class="hint">行事曆沒有提供姓名時，會以本系統已知的姓名（已註冊使用者、專案利害關係人、您過去會議的與會者）補上；仍只顯示 Email 的，可直接在「姓名」欄修改後儲存，之後重新同步也會保留。會議記錄會列出這裡的姓名。</p>
   </div>
 
   <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>

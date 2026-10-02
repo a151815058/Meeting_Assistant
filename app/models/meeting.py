@@ -17,6 +17,9 @@ class Meeting(db.Model):
 
     id = db.Column(db.String(36), primary_key=True, default=_uuid)
     organizer_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False)
+    # Optional project the meeting is filed under (REQ-65); one of the organizer's own projects.
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id", ondelete="SET NULL"),
+                           nullable=True, index=True)
 
     # "google_meet" | "teams" | "manual"
     platform = db.Column(db.String(20), nullable=False, default="manual")
@@ -34,6 +37,7 @@ class Meeting(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 
     organizer = db.relationship("User", back_populates="meetings")
+    project = db.relationship("Project", back_populates="meetings")
     participants = db.relationship("Participant", back_populates="meeting", cascade="all, delete-orphan")
     transcript_segments = db.relationship(
         "TranscriptSegment", back_populates="meeting", cascade="all, delete-orphan",
@@ -58,6 +62,8 @@ class Participant(db.Model):
 
     email = db.Column(db.String(255), nullable=False)
     display_name = db.Column(db.String(255), nullable=True)
+    # True once the organizer typed the name by hand: calendar sync then leaves it alone (REQ-66).
+    display_name_edited = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     is_organizer = db.Column(db.Boolean, nullable=False, default=False)
 
     # From Calendar/Graph invite response: "accepted" | "declined" | "tentative" | "needsAction"

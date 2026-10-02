@@ -19,6 +19,7 @@ DISABLED_MESSAGE = "知識庫功能未啟用（KNOWLEDGE_ENABLED）"
 
 ERROR_MESSAGES = {
     "meeting_not_found": "找不到指定的會議，或您不是這場會議的與會者",
+    "project_not_found": "找不到指定的專案，或您沒有參與過這個專案的會議",
     # embedding
     "model_unavailable": "無法載入向量模型（首次使用需連線 Hugging Face 下載），請稍後再試",
     "dimension_mismatch": "向量模型設定錯誤，請聯絡管理者",
@@ -40,6 +41,7 @@ class AskSchema(Schema):
     date_from = fields.Date(load_default=None)
     date_to = fields.Date(load_default=None)
     meeting_id = fields.String(load_default=None, validate=validate.Length(max=36))
+    project_id = fields.String(load_default=None, validate=validate.Length(max=36))
 
     @validates_schema
     def _range(self, data, **_kwargs):
@@ -48,7 +50,7 @@ class AskSchema(Schema):
 
 
 FIELD_LABELS = {"question": "問題", "date_from": "開始日期", "date_to": "結束日期", "meeting_id": "會議",
-                "history": "對話紀錄"}
+                "project_id": "專案", "history": "對話紀錄"}
 
 
 def _clean_history(raw) -> list[dict]:
@@ -77,7 +79,7 @@ def _source(passage: qa.Passage) -> dict:
     """A cited passage for the chat. Only the organiser can open the minutes page, so only they
     get a link to it."""
     own = passage.organizer_id == current_user.id
-    return {"number": passage.number, "title": passage.title, "date": passage.date,
+    return {"number": passage.number, "title": passage.title, "date": passage.date, "project": passage.project,
             "section": passage.section, "content": qa.plain_text(passage.content),  # shown as plain text
             "url": url_for("minutes.minutes_view", meeting_id=passage.meeting_id) if own else None}
 
@@ -87,11 +89,13 @@ def _source(passage: qa.Passage) -> dict:
 def meetings():
     """What the chat panel needs when it first opens: the meetings the user may ask about."""
     if not current_app.config["KNOWLEDGE_ENABLED"]:
-        return jsonify({"enabled": False, "meetings": []})
+        return jsonify({"enabled": False, "meetings": [], "projects": []})
+    # project_id is the meeting's current project, the same value the project filter matches on.
     return jsonify({"enabled": True, "meetings": [
-        {"id": k.meeting_id, "title": k.title,
+        {"id": k.meeting_id, "title": k.title, "project_id": k.meeting.project_id,
          "date": localtime(k.meeting_start, "%Y-%m-%d") if k.meeting_start else None}
-        for k in qa.searchable_meetings(current_user)]})
+        for k in qa.searchable_meetings(current_user)],
+        "projects": [{"id": pid, "name": name} for pid, name in qa.searchable_projects(current_user)]})
 
 
 @knowledge_bp.route("/ask", methods=["POST"])
@@ -105,7 +109,7 @@ def ask():
         return _errors(["請求格式不正確"], 400)
     # Only the expected keys; blank optional fields mean "no filter".
     raw = {k: (v.replace("\r\n", "\n").strip() if isinstance(v, str) else v)
-           for k in ("question", "date_from", "date_to", "meeting_id") if (v := body.get(k)) is not None}
+           for k in ("question", "date_from", "date_to", "meeting_id", "project_id") if (v := body.get(k)) is not None}
     try:
         data = AskSchema().load({k: v for k, v in raw.items() if v != ""})
         history = _clean_history(body.get("history"))
@@ -116,7 +120,7 @@ def ask():
     try:
         answer = qa.answer_question(current_app._get_current_object(), current_user, data["question"],
                                     history=history, date_from=data["date_from"], date_to=data["date_to"],
-                                    meeting_id=data["meeting_id"])
+                                    meeting_id=data["meeting_id"], project_id=data["project_id"])
     except (qa.QAError, EmbeddingError, LLMError) as exc:
         current_app.logger.warning("knowledge Q&A failed for user %s: %s", current_user.id, exc)
         record_audit_event(actor_user_id=current_user.id, action="knowledge.ask_failed", target_type="knowledge",
@@ -132,7 +136,7 @@ def ask():
                   "passages": len(answer.passages),
                   "cited_meetings": sorted({p.meeting_id for p in answer.cited_passages}),
                   "filters": {"date_from": raw.get("date_from") or None, "date_to": raw.get("date_to") or None,
-                              "meeting_id": data["meeting_id"]},
+                              "meeting_id": data["meeting_id"], "project_id": data["project_id"]},
                   "model": answer.model},
     )
     # The page builds the answer from these parts with textContent, never as HTML.

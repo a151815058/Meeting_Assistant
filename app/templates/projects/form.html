@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ '編輯專案' if project else '新增專案' }} - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; margin-bottom: .3rem; }
+  .field input[type="text"], .field textarea, .field select { width: 100%; }
+  .field textarea { min-height: 120px; font: inherit; line-height: 1.5; }
+  .field-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .field-row .field { flex: 1; min-width: 160px; }
+  .field-row input, .field-row select { width: 100%; }
+  .stakeholders td { padding: .3rem; }
+  .stakeholders input { width: 100%; }
+  .stakeholders td:last-child { width: 1%; white-space: nowrap; }
+  .btn-small { padding: .25rem .6rem; font-size: .85rem; box-shadow: none; background: rgba(255, 255, 255, 0.12); }
+  .btn-small:hover { background: #c5221f; }
+  .btn-secondary { background: rgba(56, 128, 255, 0.2); box-shadow: none; }
+  .hint { font-size: .9rem; opacity: .75; }
+</style>
+{% endblock %}
+{% macro stakeholder_row(s) %}
+  <tr class="stakeholder-row">
+    <td><input type="text" name="stakeholder_name" value="{{ s.name }}" maxlength="255" aria-label="利害關係人姓名"></td>
+    <td><input type="email" name="stakeholder_email" value="{{ s.email }}" maxlength="255" aria-label="利害關係人 Email"></td>
+    <td><input type="text" name="stakeholder_role" value="{{ s.role }}" maxlength="255" aria-label="利害關係人角色或單位"></td>
+    <td><button class="btn btn-small stakeholder-remove" type="button">移除</button></td>
+  </tr>
+{% endmacro %}
+{% block content %}
+  <p><a href="{{ url_for('projects.project_list') }}">← 回到專案管理</a></p>
+  <h1>{{ '編輯專案' if project else '新增專案' }}</h1>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field">
+      <label for="name">專案名稱</label>
+      <input id="name" type="text" name="name" value="{{ form.name }}" required maxlength="255">
+    </div>
+    <div class="field">
+      <label for="description">專案說明（選填）</label>
+      <textarea id="description" name="description" maxlength="5000">{{ form.description }}</textarea>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="start_date">專案期程：開始日期</label>
+        <input id="start_date" type="date" name="start_date" value="{{ form.start_date }}">
+      </div>
+      <div class="field">
+        <label for="end_date">結束日期</label>
+        <input id="end_date" type="date" name="end_date" value="{{ form.end_date }}">
+      </div>
+      <div class="field">
+        <label for="status">狀態</label>
+        <select id="status" name="status">
+          {% for value, label in status_labels.items() %}
+            <option value="{{ value }}" {% if form.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <h2>相關利害關係人</h2>
+    <p class="hint">姓名必填，Email 與角色／單位選填，最多 {{ max_stakeholders }} 位；整列留白會略過。
+      填了 Email 的利害關係人，同步行事曆與會者時可用來補上姓名。</p>
+    <table class="stakeholders">
+      <thead><tr><th>姓名</th><th>Email</th><th>角色／單位</th><th></th></tr></thead>
+      <tbody id="stakeholder-rows" data-max="{{ max_stakeholders }}">
+        {% for s in form.stakeholders %}{{ stakeholder_row(s) }}{% endfor %}
+        {{ stakeholder_row({'name': '', 'email': '', 'role': ''}) }}
+      </tbody>
+    </table>
+    <template id="stakeholder-template">{{ stakeholder_row({'name': '', 'email': '', 'role': ''}) }}</template>
+    <p><button class="btn btn-secondary" type="button" id="stakeholder-add">+ 新增一列</button></p>
+
+    <div class="btn-row">
+      <button class="btn" type="submit">儲存</button>
+      <a href="{{ url_for('projects.project_list') }}">取消</a>
+    </div>
+  </form>
+
+  {% if project %}
+    <h2>此專案的會議（{{ meetings|length }}）</h2>
+    <table>
+      <thead><tr><th>標題</th><th>狀態</th><th>時間</th></tr></thead>
+      <tbody>
+      {% for meeting in meetings %}
+        <tr>
+          <td><a href="{{ url_for('meetings.detail', meeting_id=meeting.id) }}">{{ meeting.title }}</a></td>
+          <td>{{ meeting.status|meeting_status }}</td>
+          <td>{{ meeting.scheduled_start|localtime('%Y-%m-%d（%W）%H:%M') if meeting.scheduled_start else '-' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3">尚無會議；新增會議時選擇這個專案即可歸入。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <script src="{{ url_for('static', filename='js/project_form.js') }}"></script>
+{% endblock %}

@@ -13,11 +13,13 @@ from zoneinfo import ZoneInfo
 
 from googleapiclient.discovery import build
 import requests
+from sqlalchemy import func
 
 from app.auth.token_service import get_valid_access_token
 from app.background import run_blocking
 from app.extensions import db
 from app.models.meeting import Meeting, Participant
+from app.models.project import Project, ProjectStakeholder
 from app.models.user import OAuthAccount, User
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,46 @@ def _extract_microsoft_attendees(event: dict) -> list[dict]:
     return attendees
 
 
+def is_real_name(name: str | None, email: str) -> bool:
+    """False for a missing name and for the e-mail address standing in for one."""
+    name = (name or "").strip()
+    return bool(name) and name.lower() != email.strip().lower()
+
+
+def known_names(meeting: Meeting, emails) -> dict[str, str]:
+    """Names this app already has for attendees the calendar listed by e-mail only (REQ-66).
+
+    Google leaves ``displayName`` out for most attendees outside the organizer's contacts or
+    domain. Looked up by e-mail, in order of preference: a registered user's name, a stakeholder
+    of the organizer's projects (the meeting's own project first), then the name the same person
+    has in the organizer's other meetings (the most recent one). Keys are lower-case e-mails.
+    """
+    wanted = {e.strip().lower() for e in emails if e}
+    if not wanted:
+        return {}
+    names: dict[str, str] = {}  # filled from the least to the most preferred source
+
+    earlier = (db.session.query(Participant.email, Participant.display_name)
+               .join(Meeting, Meeting.id == Participant.meeting_id)
+               .filter(Meeting.organizer_id == meeting.organizer_id, Meeting.id != meeting.id,
+                       func.lower(Participant.email).in_(wanted))
+               .order_by(Participant.created_at))
+    for email, name in earlier:
+        if is_real_name(name, email):
+            names[email.lower()] = name.strip()
+
+    stakeholders = (ProjectStakeholder.query.join(Project, Project.id == ProjectStakeholder.project_id)
+                    .filter(Project.owner_id == meeting.organizer_id,
+                            func.lower(ProjectStakeholder.email).in_(wanted)).all())
+    for s in sorted(stakeholders, key=lambda s: s.project_id == meeting.project_id):
+        names[s.email.lower()] = s.name.strip()
+
+    for user in User.query.filter(func.lower(User.email).in_(wanted)):
+        if is_real_name(user.display_name, user.email):
+            names[user.email.lower()] = user.display_name.strip()
+    return names
+
+
 def sync_meeting_participants(meeting: Meeting) -> list[Participant]:
     if meeting.platform not in ("google_meet", "teams"):
         raise ValueError(f"Cannot sync participants for platform={meeting.platform!r}")
@@ -100,6 +142,8 @@ def sync_meeting_participants(meeting: Meeting) -> list[Participant]:
         event = _fetch_microsoft_event(access_token, meeting.platform_event_id)
         attendees = _extract_microsoft_attendees(event)
 
+    fallback = known_names(meeting, [a["email"] for a in attendees
+                                     if not is_real_name(a["display_name"], a["email"])])
     existing_by_email = {p.email: p for p in meeting.participants}
     result: list[Participant] = []
     for a in attendees:
@@ -107,7 +151,13 @@ def sync_meeting_participants(meeting: Meeting) -> list[Participant]:
         if participant is None:
             participant = Participant(meeting_id=meeting.id, email=a["email"])
             db.session.add(participant)
-        participant.display_name = a["display_name"]
+        if not participant.display_name_edited:  # a name the organizer typed is never overwritten
+            name = a["display_name"] if is_real_name(a["display_name"], a["email"]) \
+                else fallback.get(a["email"].lower())
+            if name:
+                participant.display_name = name
+            elif not is_real_name(participant.display_name, participant.email):
+                participant.display_name = a["email"]
         participant.response_status = a["response_status"]
         participant.is_organizer = a["is_organizer"]
         result.append(participant)

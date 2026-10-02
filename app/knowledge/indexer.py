@@ -84,6 +84,7 @@ def meeting_metadata(app, meeting: Meeting) -> dict:
         if email and email not in emails:
             emails.append(email)
             names.append((name or email).strip())
+    project = meeting.project
     return {
         "meeting_id": meeting.id,
         "title": meeting.title,
@@ -93,6 +94,13 @@ def meeting_metadata(app, meeting: Meeting) -> dict:
         "organizer": (organizer.display_name or organizer.email) if organizer else "",
         "participant_emails": emails,
         "participant_names": names,
+        # Project the meeting is filed under (REQ-68); None / empty when it has none.
+        "project_id": project.id if project else None,
+        "project_name": project.name if project else None,
+        "project_description": (project.description or "") if project else "",
+        "project_start": project.start_date.isoformat() if project and project.start_date else None,
+        "project_end": project.end_date.isoformat() if project and project.end_date else None,
+        "project_stakeholders": [s.name for s in project.stakeholders] if project else [],
     }
 
 
@@ -101,10 +109,24 @@ def _content_hash(markdown: str, metadata: dict, model: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _minutes_hash(markdown: str, title: str) -> str:
+    """Of everything the AI summary is made from."""
+    return hashlib.sha256(json.dumps([title, markdown], ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _stored_summary(knowledge: MeetingKnowledge) -> summary_mod.KnowledgeSummary:
+    return summary_mod.KnowledgeSummary(
+        summary=knowledge.summary or "", key_points=list(knowledge.key_points or []),
+        decisions=list(knowledge.decisions or []), action_items=list(knowledge.action_items or []),
+        keywords=list(knowledge.keywords or []))
+
+
 def passage_text(metadata: dict, section: str | None, text: str) -> str:
-    """What is embedded: the passage plus where it came from, so a query naming the meeting,
-    date or section lands on the right passages. The stored ``content`` is the bare passage."""
+    """What is embedded: the passage plus where it came from, so a query naming the project,
+    meeting, date or section lands on the right passages. The stored ``content`` is the bare passage."""
     header = f"會議：{metadata['title']}｜日期：{metadata['date'] or '未知'}"
+    if metadata.get("project_name"):
+        header = f"專案：{metadata['project_name']}｜{header}"
     if section:
         header += f"｜章節：{section}"
     return f"{header}\n{text}"
@@ -146,16 +168,26 @@ def index_meeting(app, meeting_id: str, actor_user_id: str | None = None, *, for
             raise EmbeddingError("dimension_mismatch", "embedder returned unexpected vectors")
 
         # The summary is optional metadata: its failure is recorded but does not block indexing.
+        # When only metadata changed (attendees, project), the stored summary is kept, so the
+        # minutes are not sent to the LLM again (RISK-13).
         summary_error = None
-        try:
-            provider = summary_mod.get_summary_provider(app)
-            summary = run_blocking(summary_mod.summarize, provider, meeting.title, minutes.content_markdown,
-                                   inline=inline)
-        except (LLMError, summary_mod.SummaryError) as exc:
-            logger.warning("knowledge summary failed for meeting %s: %s", meeting.id, exc)
-            summary, summary_error = summary_mod.KnowledgeSummary(), exc.code
+        minutes_hash = _minutes_hash(minutes.content_markdown, meeting.title)
+        if (not force and knowledge.minutes_hash == minutes_hash and knowledge.summary_error is None
+                and knowledge.indexed_at is not None):
+            summary = _stored_summary(knowledge)
+        else:
+            try:
+                provider = summary_mod.get_summary_provider(app)
+                summary = run_blocking(summary_mod.summarize, provider, meeting.title, minutes.content_markdown,
+                                       inline=inline)
+            except (LLMError, summary_mod.SummaryError) as exc:
+                logger.warning("knowledge summary failed for meeting %s: %s", meeting.id, exc)
+                summary, summary_error = summary_mod.KnowledgeSummary(), exc.code
 
         knowledge.minutes_id = minutes.id
+        knowledge.minutes_hash = minutes_hash
+        knowledge.project_id = metadata["project_id"]
+        knowledge.project_name = metadata["project_name"]
         knowledge.title = metadata["title"]
         knowledge.meeting_start = meeting.scheduled_start or meeting.created_at
         knowledge.platform = meeting.platform

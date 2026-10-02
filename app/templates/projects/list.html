@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}專案管理 - 會議小助手{% endblock %}
+{% block extra_head %}
+<style>
+  .inline-form { display: inline; }
+  .link-btn { background: none; border: none; padding: 0; color: #8cc4ff; text-decoration: underline; cursor: pointer; font: inherit; }
+  .link-btn.danger { color: #ffb4ab; }
+  .badge { font-size: .8rem; padding: .1rem .45rem; border-radius: 999px; background: rgba(56, 140, 255, .3); }
+  .badge.closed { background: rgba(255, 255, 255, .12); }
+  .muted { opacity: .7; font-size: .9rem; }
+</style>
+{% endblock %}
+{% block content %}
+  <h1>專案管理</h1>
+  <p>建立專案後，新增會議時可選擇所屬專案；專案名稱、期程與利害關係人會帶入會議記錄與知識庫，方便之後依專案查詢。</p>
+  <p><a class="btn" href="{{ url_for('projects.project_new') }}">+ 新增專案</a></p>
+  <table>
+    <thead><tr><th>專案名稱</th><th>期程</th><th>狀態</th><th>利害關係人</th><th>會議</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for p in projects %}
+      <tr>
+        <td>
+          <a href="{{ url_for('projects.project_edit', project_id=p.id) }}">{{ p.name }}</a>
+          {% if p.description %}<div class="muted">{{ p.description|truncate(60) }}</div>{% endif %}
+        </td>
+        <td>{{ p.period or '-' }}</td>
+        <td><span class="badge {{ p.status }}">{{ status_labels.get(p.status, p.status) }}</span></td>
+        <td>{{ p.stakeholders|length }} 位</td>
+        <td>{{ p.meetings|length }} 場</td>
+        <td>
+          <a href="{{ url_for('projects.project_edit', project_id=p.id) }}">編輯</a>
+          ・<form class="inline-form" method="post" action="{{ url_for('projects.project_delete', project_id=p.id) }}"
+                data-confirm="確定要刪除專案「{{ p.name }}」嗎？專案下的會議與會議記錄會保留，但不再屬於任何專案。">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-btn danger" type="submit">刪除</button>
+            </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6">尚無專案</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

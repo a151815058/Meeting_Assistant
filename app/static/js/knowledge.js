@@ -13,6 +13,7 @@
   const input = document.getElementById("kb-question");
   const sendButton = document.getElementById("kb-send");
   const meetingSelect = document.getElementById("kb-meeting");
+  const projectSelect = document.getElementById("kb-project");
   const dateFrom = document.getElementById("kb-date-from");
   const dateTo = document.getElementById("kb-date-to");
 
@@ -23,6 +24,7 @@
   let messages = loadMessages(); // {role: "user" | "assistant", text, segments?, sources?, error?}
   let busy = false;
   let meetingsLoaded = false;
+  let allMeetings = []; // from the server; the meeting list shows those of the selected project
   let rendered = 0; // makes source element ids unique per message
 
   function loadMessages() {
@@ -69,7 +71,7 @@
       } else {
         summary.append(source.title || "");
       }
-      summary.append("・" + (source.date || "日期未知") + (source.section ? "・" + source.section : ""));
+      summary.append((source.project ? "・" + source.project : "") + "・" + (source.date || "日期未知") + (source.section ? "・" + source.section : ""));
       item.append(summary, el("p", "", source.content || ""));
       box.append(item);
     }
@@ -127,17 +129,34 @@
 
   // --- talking to the server ---------------------------------------------------------------
 
+  function renderMeetingOptions() {
+    const projectId = projectSelect.value;
+    const selected = meetingSelect.value;
+    meetingSelect.replaceChildren(el("option", "", projectId ? "此專案的全部會議" : "全部會議"));
+    meetingSelect.firstChild.value = "";
+    for (const meeting of allMeetings) {
+      if (projectId && meeting.project_id !== projectId) continue;
+      const option = el("option", "", (meeting.date || "日期未知") + " " + meeting.title);
+      option.value = meeting.id;
+      meetingSelect.append(option);
+    }
+    meetingSelect.value = selected; // falls back to "all" when that meeting is not in the project
+    if (meetingSelect.selectedIndex < 0) meetingSelect.value = "";
+  }
+
   async function loadMeetings() {
     if (meetingsLoaded) return;
     meetingsLoaded = true;
     try {
       const resp = await fetch(root.dataset.meetingsUrl, { headers: { Accept: "application/json" }, credentials: "same-origin" });
       const data = await resp.json();
-      for (const meeting of data.meetings) {
-        const option = el("option", "", (meeting.date || "日期未知") + " " + meeting.title);
-        option.value = meeting.id;
-        meetingSelect.append(option);
+      allMeetings = data.meetings;
+      for (const project of data.projects || []) {
+        const option = el("option", "", project.name);
+        option.value = project.id;
+        projectSelect.append(option);
       }
+      renderMeetingOptions();
       document.getElementById("kb-count").textContent = "目前可查詢 " + data.meetings.length + " 場會議。";
     } catch (err) {
       meetingsLoaded = false; // try again the next time the panel opens
@@ -166,6 +185,7 @@
           question: question,
           history: history,
           meeting_id: meetingSelect.value,
+          project_id: projectSelect.value,
           date_from: dateFrom.value,
           date_to: dateTo.value,
         }),
@@ -189,6 +209,8 @@
     sendButton.disabled = false;
     input.focus();
   }
+
+  projectSelect.addEventListener("change", renderMeetingOptions);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();

@@ -167,6 +167,8 @@ def _meeting_info(meeting) -> list[tuple[str, str]]:
     info.append(("主辦人", organizer.display_name or organizer.email))
     names = [p.display_name or p.email for p in sorted(meeting.participants, key=lambda p: p.email.lower())]
     info.append(("與會者", "、".join(names) if names else "—"))
+    if meeting.project is not None:
+        info.append(("專案", meeting.project.name))
     return info
 
 

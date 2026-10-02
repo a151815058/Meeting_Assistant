@@ -45,6 +45,18 @@
              {% if not has_calendar %}required{% endif %}>
     </label></p>
 
+    <p><label>專案（選填，會議記錄與知識庫會帶入專案資訊）<br>
+      <select name="project_id" id="meeting-project">
+        <option value="">— 不屬於任何專案 —</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if form.get('project_id') == p.id %}selected{% endif %}>{{ p.name }}{% if p.period %}（{{ p.period }}）{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label></p>
+    {% if not projects %}
+      <p class="hint">尚未建立進行中的專案，可先到<a href="{{ url_for('projects.project_list') }}">專案管理</a>新增。</p>
+    {% endif %}
+
     <details id="manual-event" {% if form.get('platform_event_id') %}open{% endif %}>
       <summary>進階：手動指定平台與行事曆事件 ID</summary>
       <p><label>平台<br>

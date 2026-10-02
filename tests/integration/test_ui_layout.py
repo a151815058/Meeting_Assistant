@@ -26,11 +26,12 @@ def test_login_background_image_is_served(client):
 
 
 def test_header_has_no_login_link_for_anonymous_users(client):
-    """TC-42: 未登入時頁首右上角不顯示「登入」連結（登入頁本身已提供登入按鈕）。"""
+    """TC-42、TC-71: 未登入時頁首右上角不顯示「登入」連結（登入頁本身已提供登入按鈕），也沒有功能選單圖示。"""
     html = client.get("/auth/login").get_data(as_text=True)
     nav = html[html.index("<nav>"):html.index("</nav>")]
     assert "/auth/login" not in nav
     assert "登入" not in nav
+    assert 'id="nav-toggle"' not in nav and "<button" not in nav
 
 
 def _nav(html: str) -> str:
@@ -120,8 +121,8 @@ def test_google_site_verification_meta_tag_only_when_configured(client, app):
 
 
 def test_header_links_are_buttons_and_mark_current_page(client, app, db):
-    """TC-44: 登入後頁首「會議」「範本」「登出」為導覽按鈕，目前所在頁面以 aria-current 標示
-    （知識庫改為右下角聊天圖示，REQ-63）。"""
+    """TC-44、TC-69: 登入後頁首「我的會議」「專案管理」「會議記錄範本」「登出」為導覽按鈕，目前所在頁面以
+    aria-current 標示（知識庫改為右下角聊天圖示，REQ-63；名稱於 REQ-69 調整並新增專案管理）。"""
     with app.app_context():
         user = User(email="nav@example.com", display_name="Nav")
         _db.session.add(user)
@@ -134,13 +135,50 @@ def test_header_links_are_buttons_and_mark_current_page(client, app, db):
     nav = _nav(client.get("/meetings/").get_data(as_text=True))
     buttons = re.findall(r'<a class="(nav-btn[^"]*)" href="([^"]+)"([^>]*)>([^<]+)</a>', nav)
     assert [(href, text) for _, href, _, text in buttons] == [
-        ("/meetings/", "會議"), ("/templates/", "範本"), ("/auth/logout", "登出")]
-    assert "nav-btn-logout" in buttons[2][0]
-    assert [bool(attrs.strip()) for _, _, attrs, _ in buttons] == [True, False, False]
+        ("/meetings/", "我的會議"), ("/projects/", "專案管理"), ("/templates/", "會議記錄範本"),
+        ("/auth/logout", "登出")]
+    assert "nav-btn-logout" in buttons[3][0]
+    assert [bool(attrs.strip()) for _, _, attrs, _ in buttons] == [True, False, False, False]
 
     nav = _nav(client.get("/templates/").get_data(as_text=True))
     assert re.search(r'href="/templates/" aria-current="page"', nav)
     assert 'href="/meetings/" aria-current' not in nav
+
+    for path in ("/projects/", "/projects/new"):
+        nav = _nav(client.get(path).get_data(as_text=True))
+        assert re.search(r'href="/projects/" aria-current="page"', nav), path
+        assert 'href="/meetings/" aria-current' not in nav
+
+
+def test_header_links_are_inside_an_icon_menu(client, app, db):
+    """TC-71: 登入後頁首右上角只有一個「功能選單」圖示，使用者名稱與導覽按鈕收在選單面板內；面板預設隱藏，
+    滑鼠移到圖示、鍵盤聚焦或點擊（.open）才展開；無行內 JS（未登入時沒有選單圖示見 TC-42 的測試）。"""
+    with app.app_context():
+        user = User(email="menu@example.com", display_name="選單使用者")
+        _db.session.add(user)
+        _db.session.commit()
+        user_id = user.id
+    with client.session_transaction() as sess:
+        sess["_user_id"] = user_id
+        sess["_fresh"] = True
+
+    html = client.get("/meetings/").get_data(as_text=True)
+    nav = _nav(html)
+    toggle = re.search(r'<button type="button" class="nav-toggle" id="nav-toggle"([^>]*)>', nav)
+    assert toggle and nav.count("<button") == 1
+    for attr in ('aria-label="功能選單"', 'aria-expanded="false"', 'aria-controls="nav-panel"', 'aria-haspopup="true"'):
+        assert attr in toggle.group(1), attr
+    panel = nav[nav.index('id="nav-panel"'):]
+    assert nav.index('id="nav-toggle"') < nav.index('id="nav-panel"')
+    assert "選單使用者" in panel and panel.count('class="nav-btn') == 4
+    assert 'class="nav-btn' not in nav[:nav.index('id="nav-panel"')]  # nothing but the icon outside the panel
+    assert "onclick" not in nav and "onmouseover" not in nav
+
+    assert "visibility: hidden" in html.split(".nav-panel {")[1].split("}")[0]
+    for selector in (".nav-menu:hover .nav-panel", ".nav-menu:focus-within .nav-panel", ".nav-menu.open .nav-panel"):
+        assert selector in html, selector
+    script = client.get("/static/js/common.js").get_data(as_text=True)
+    assert 'getElementById("nav-toggle")' in script and '"aria-expanded"' in script and "Escape" in script
 
 
 def test_header_nav_buttons_have_no_border(client):

@@ -40,6 +40,11 @@ class MeetingKnowledge(db.Model):
     organizer_name = db.Column(db.String(255), nullable=True)
     participant_emails = db.Column(ARRAY(db.String(255)), nullable=False, default=list)  # lower-case
     participant_names = db.Column(ARRAY(db.String(255)), nullable=False, default=list)
+    # Project the meeting was filed under at index time (REQ-68); the rest of the project
+    # metadata (description, period, stakeholders) is in each chunk's metadata.
+    project_id = db.Column(db.String(36), db.ForeignKey("projects.id", ondelete="SET NULL"),
+                           nullable=True, index=True)
+    project_name = db.Column(db.String(255), nullable=True)
 
     # AI summary of the saved minutes; empty lists when the summary step failed (see summary_error)
     summary = db.Column(db.Text, nullable=True)
@@ -52,7 +57,8 @@ class MeetingKnowledge(db.Model):
     # "pending" | "indexing" | "indexed" | "failed"
     status = db.Column(db.String(20), nullable=False, default="pending")
     error = db.Column(db.String(50), nullable=True)
-    content_hash = db.Column(db.String(64), nullable=True)  # of the indexed minutes version
+    content_hash = db.Column(db.String(64), nullable=True)  # of the indexed minutes version + metadata
+    minutes_hash = db.Column(db.String(64), nullable=True)  # of the minutes text the summary was made from
     embedding_model = db.Column(db.String(255), nullable=True)
     chunk_count = db.Column(db.Integer, nullable=False, default=0)
     indexed_at = db.Column(db.DateTime(timezone=True), nullable=True)

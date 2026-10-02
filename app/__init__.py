@@ -45,10 +45,12 @@ def create_app(config_name: str | None = None) -> Flask:
     from app.auth import auth_bp
     from app.meetings import meetings_bp
     from app.minutes import minutes_bp
+    from app.projects import projects_bp
     from app.public import public_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(meetings_bp)
+    app.register_blueprint(projects_bp)
     app.register_blueprint(minutes_bp)
     app.register_blueprint(public_bp)
 

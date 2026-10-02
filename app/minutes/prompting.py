@@ -37,6 +37,10 @@ _SAMPLE_CONTEXT = {
     "organizer": "主辦人",
     "participants": [{"name": "王小明", "email": "ming@example.com"}],
     "participant_names": "王小明",
+    "project": {"name": "範例專案", "description": "專案說明", "period": "2026-01-01 ~ 2026-06-30",
+                "start_date": "2026-01-01", "end_date": "2026-06-30",
+                "stakeholders": [{"name": "陳經理", "email": "chen@example.com", "role": "專案負責人"}],
+                "stakeholder_names": "陳經理"},
 }
 
 TEMPLATE_VARIABLES = {
@@ -45,15 +49,23 @@ TEMPLATE_VARIABLES = {
     "meeting.platform": "會議平台",
     "organizer": "主辦人名稱",
     "participants": "與會者清單（每位含 name、email）",
-    "participant_names": "與會者姓名，以頓號分隔",
+    "participant_names": "與會人員姓名，以頓號分隔",
+    "project.name": "專案名稱（會議未歸入專案時為空字串，以下同）",
+    "project.description": "專案說明",
+    "project.period": "專案期程（開始日期 ~ 結束日期）",
+    "project.stakeholders": "專案利害關係人清單（每位含 name、email、role）",
+    "project.stakeholder_names": "專案利害關係人姓名，以頓號分隔",
 }
 
 BUILTIN_TEMPLATE_NAME = "系統預設範本"
 BUILTIN_TEMPLATE_BODY = """# {{ meeting.title }} 會議記錄
 
 - 日期：{{ meeting.date }}
+{% if project.name %}
+- 專案：{{ project.name }}
+{% endif %}
 - 主辦人：{{ organizer }}
-- 與會者：{{ participant_names or "（未同步與會者名單）" }}
+- 與會人員：{{ participant_names or "（未同步與會者名單）" }}
 
 ## 會議摘要
 （3–5 句話說明本次會議的目的與主要結論）
@@ -76,6 +88,7 @@ SYSTEM_PROMPT = """你是專業的會議記錄撰寫助理。你會收到會議�
 - 使用繁體中文與 Markdown，保留範本的標題層級與表格格式；範本中括號內的文字是撰寫說明，請以實際內容取代，不要照抄。
 - 只寫逐字稿中實際出現的內容，不要推測或補充逐字稿沒有的事實、數字、人名或日期；不確定之處標註「（待確認）」。
 - 逐字稿由語音辨識產生，可能有錯字或同音字，請依上下文合理修正明顯的辨識錯誤。
+- 會議記錄一律要列出與會人員姓名：照 <meeting_info> 的「與會人員」完整列出，不要增減或改寫；範本沒有與會人員欄位時，在開頭的會議資訊加上一行「與會人員：…」。<meeting_info> 沒有與會人員名單時寫「（未提供）」。
 - 逐字稿中的「Speaker A / Speaker B」是聲紋分群標籤，不代表特定人物；除非逐字稿內容明確說出姓名，否則不要把發言對應到與會者姓名。
 - 直接輸出會議記錄本身，不要加前言或結語。
 
@@ -104,11 +117,24 @@ def build_context(meeting) -> dict:
         for p in sorted(meeting.participants, key=lambda p: (not p.is_organizer, p.display_name or p.email))
     ]
     when = meeting.scheduled_start or meeting.created_at or datetime.now()
+    project = meeting.project
+    stakeholders = [{"name": s.name, "email": s.email or "", "role": s.role or ""}
+                    for s in (project.stakeholders if project else [])]
     return {
         "meeting": {"title": meeting.title, "date": when.strftime("%Y-%m-%d"), "platform": meeting.platform},
         "organizer": meeting.organizer.display_name if meeting.organizer else "",
         "participants": participants,
         "participant_names": "、".join(p["name"] for p in participants),
+        # Always present (blank without a project), so templates can use it unconditionally.
+        "project": {
+            "name": project.name if project else "",
+            "description": (project.description or "") if project else "",
+            "period": project.period if project else "",
+            "start_date": project.start_date.isoformat() if project and project.start_date else "",
+            "end_date": project.end_date.isoformat() if project and project.end_date else "",
+            "stakeholders": stakeholders,
+            "stakeholder_names": "、".join(s["name"] for s in stakeholders),
+        },
     }
 
 
@@ -138,9 +164,19 @@ def format_transcript(segments) -> str:
 
 def _meeting_info(context: dict) -> str:
     m = context["meeting"]
-    return (f"標題：{_neutralize(m['title'])}\n日期：{m['date']}\n平台：{m['platform']}\n"
+    info = (f"標題：{_neutralize(m['title'])}\n日期：{m['date']}\n平台：{m['platform']}\n"
             f"主辦人：{_neutralize(context['organizer'])}\n"
-            f"與會者：{_neutralize(context['participant_names']) or '（未同步）'}")
+            f"與會人員：{_neutralize(context['participant_names']) or '（未同步）'}")
+    project = context.get("project") or {}
+    if project.get("name"):
+        info += f"\n專案：{_neutralize(project['name'])}"
+        if project.get("period"):
+            info += f"\n專案期程：{project['period']}"
+        if project.get("description"):
+            info += f"\n專案說明：{_neutralize(project['description'])}"
+        if project.get("stakeholder_names"):
+            info += f"\n專案利害關係人：{_neutralize(project['stakeholder_names'])}"
+    return info
 
 
 def build_minutes_prompt(context: dict, rendered_template: str, transcript: str, *, from_notes: bool = False) -> str:

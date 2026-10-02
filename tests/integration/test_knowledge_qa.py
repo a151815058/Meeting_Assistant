@@ -276,7 +276,7 @@ def test_meeting_list_and_the_switch(client, app, people):
                                                                (people["launch"], "2026-09-30")}
 
     app.config["KNOWLEDGE_ENABLED"] = False
-    assert client.get("/knowledge/meetings").get_json() == {"enabled": False, "meetings": []}
+    assert client.get("/knowledge/meetings").get_json() == {"enabled": False, "meetings": [], "projects": []}
     resp = client.post("/knowledge/ask", json={"question": "預算"})
     assert resp.status_code == 503 and "知識庫功能未啟用" in resp.get_json()["errors"][0]
     assert _qa_llm(app).calls == []
