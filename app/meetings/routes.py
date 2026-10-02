@@ -5,12 +5,19 @@ from flask_login import current_user, login_required
 from marshmallow import ValidationError
 
 from app.extensions import db
+from app.knowledge import indexer
 from app.meetings import calendar_sync, meetings_bp
 from app.meetings.calendar_sync import sync_meeting_participants
 from app.meetings.schemas import MeetingSchema, ParticipantSchema
 from app.models.meeting import Meeting, Participant
 from app.security.audit import record_audit_event
 from app.transcription import upload as audio_upload
+
+
+def _refresh_knowledge(meeting: Meeting) -> None:
+    """The attendee list is knowledge-base metadata (REQ-59, REQ-62): re-index after it changes."""
+    if meeting.minutes is not None:
+        indexer.schedule_index(current_app._get_current_object(), meeting.id, current_user.id)
 
 
 @meetings_bp.route("/")
@@ -154,6 +161,7 @@ def sync_participants(meeting_id):
     try:
         participants = sync_meeting_participants(meeting)
         flash(f"已同步 {len(participants)} 位與會者", "success")
+        _refresh_knowledge(meeting)
     except (ValueError, RuntimeError) as exc:
         flash(f"同步失敗：{exc}", "error")
     return redirect(url_for("meetings.detail", meeting_id=meeting.id, _anchor="participants"))
@@ -188,6 +196,7 @@ def add_participant(meeting_id):
         record_audit_event(actor_user_id=current_user.id, action="participant.added", target_type="meeting",
                            target_id=meeting.id, metadata={"email": data["email"]})
         flash(f"已新增與會者 {data['email']}", "success")
+        _refresh_knowledge(meeting)
     return redirect(url_for("meetings.detail", meeting_id=meeting.id, _anchor="participants"))
 
 
@@ -206,4 +215,5 @@ def remove_participant(meeting_id, participant_id):
     record_audit_event(actor_user_id=current_user.id, action="participant.removed", target_type="meeting",
                        target_id=meeting.id, metadata={"email": email})
     flash(f"已移除與會者 {email}", "success")
+    _refresh_knowledge(meeting)
     return redirect(url_for("meetings.detail", meeting_id=meeting.id, _anchor="participants"))

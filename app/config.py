@@ -83,6 +83,11 @@ class BaseConfig:
     # The summary metadata is one extra LLM call per indexed version; empty model = LLM_MODEL.
     KNOWLEDGE_SUMMARY_MODEL = os.environ.get("KNOWLEDGE_SUMMARY_MODEL", "")
     KNOWLEDGE_SUMMARY_EFFORT = os.environ.get("KNOWLEDGE_SUMMARY_EFFORT", "medium")
+    # Q&A (REQ-62): one LLM call per question over the KNOWLEDGE_QA_TOP_K closest passages.
+    KNOWLEDGE_QA_MODEL = os.environ.get("KNOWLEDGE_QA_MODEL", "")  # empty = LLM_MODEL
+    KNOWLEDGE_QA_EFFORT = os.environ.get("KNOWLEDGE_QA_EFFORT", "medium")
+    KNOWLEDGE_QA_MAX_OUTPUT_TOKENS = int(os.environ.get("KNOWLEDGE_QA_MAX_OUTPUT_TOKENS", 8000))
+    KNOWLEDGE_QA_TOP_K = int(os.environ.get("KNOWLEDGE_QA_TOP_K", 8))
     # Local ONNX embedding model (no torch, no third-party API). Changing it requires a migration
     # when the dimension differs (the pgvector column is vector(384)) and a full reindex.
     EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "e5_onnx")

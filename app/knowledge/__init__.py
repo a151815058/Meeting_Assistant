@@ -1,7 +1,11 @@
-"""Knowledge base over past meetings (REQ-58 ~ REQ-60). Phase 1: saved minutes are chunked,
-embedded and stored in pgvector with meeting metadata and an AI summary. Q&A comes later."""
+"""Knowledge base over past meetings. Phase 1 (REQ-58 ~ REQ-60): saved minutes are chunked,
+embedded and stored in pgvector with meeting metadata and an AI summary. Phase 2 (REQ-62, REQ-63):
+a chat over the meetings a user took part in (``routes``, ``qa``; the chat box is in base.html)."""
 import click
+from flask import Blueprint
 from flask.cli import AppGroup
+
+knowledge_bp = Blueprint("knowledge", __name__, url_prefix="/knowledge")
 
 knowledge_cli = AppGroup("knowledge", help="知識庫（會議記錄向量索引）管理")
 
@@ -40,4 +44,9 @@ def reindex_command(meeting_ids, all_meetings, failed_only, force):
 
 
 def register(app) -> None:
+    # Imported here, not at module level: app.minutes.routes imports this package's indexer.
+    from app.knowledge import routes  # noqa: F401
+
     app.cli.add_command(knowledge_cli)
+    app.register_blueprint(knowledge_bp)
+    app.jinja_env.globals["knowledge_max_question_chars"] = routes.MAX_QUESTION_CHARS  # chat box in base.html

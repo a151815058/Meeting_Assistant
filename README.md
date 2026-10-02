@@ -10,7 +10,7 @@ AI 會議記錄產製、自動寄送。依 SSDLC（Secure Software Development L
 2. 串接 Google Meet / Microsoft Teams 取得與會者名單，並以語者分離標記發言片段
 3. 會議結束後依可自訂範本，由 LLM（預設 Anthropic Claude，介面可抽換）自動產製會議記錄
 4. 會議記錄透過 Gmail API / Microsoft Graph Mail API 自動寄送給所有與會者
-5. 知識庫：會議記錄自動切片、向量化存入 PostgreSQL（pgvector），並建立會議名稱、與會者、AI 重點摘要等 metadata（第一階段；問答介面開發中）
+5. 知識庫：會議記錄自動切片、向量化存入 PostgreSQL（pgvector），並建立會議名稱、與會者、AI 重點摘要等 metadata；以自然語言查詢自己參與過的會議，AI 依會議記錄回答並標示出處
 
 ## 專案文件（SSDLC 交付物）
 
@@ -51,6 +51,20 @@ AI 會議記錄產製、自動寄送。依 SSDLC（Secure Software Development L
 - 會議記錄頁下方的「知識庫」區塊顯示狀態；失敗時可按「重建知識庫索引」。寫入失敗不影響會議記錄本身。
 - 為既有會議記錄回填、或重試失敗：`flask knowledge reindex --failed`（`--all` 全部、`--meeting <ID>` 指定會議、`--force` 內容未變也重建）。
 - 不需要時可在 `.env` 設定 `KNOWLEDGE_ENABLED=false`。
+
+### 知識庫問答（REQ-62、REQ-63）
+
+- 登入後每一頁右下角有聊天圖示，**滑鼠移到圖示**就會出現聊天面板（點一下圖示可固定，✕、Esc 或點面板外關閉）。
+  像聊天一樣輸入問題（例如「行銷預算最後決定是多少？」），Enter 送出、Shift+Enter 換行；可以接著追問（「那誰負責？」）。
+  「查詢範圍」可指定會議或日期範圍。
+- 對話只存在瀏覽器的這個分頁（換頁保留，關閉分頁、登出或按「清除對話」即清除），伺服器不保存。
+  追問時最近的對話（最多 8 則）會連同問題送給 AI，用來理解上下文。
+- 只會查詢您**主辦**或**列在與會者名單中**的會議（依目前的與會者名單判斷，Email 不分大小寫）；被移出與會者後立即查不到。
+- 系統取回最相關的 `KNOWLEDGE_QA_TOP_K`（預設 8）個會議記錄片段，由 AI 只根據這些片段回答，每句後面的 [1]、[2] 可點開該則回答下方的引用來源（會議名稱、日期、章節與原文）。
+  本人主辦的會議附會議記錄頁連結。找不到相關片段時不會呼叫 AI。
+- 片段會傳送至 Anthropic API 處理（與產生會議記錄相同）。模型與思考深度可用 `KNOWLEDGE_QA_MODEL`（空白＝`LLM_MODEL`）、`KNOWLEDGE_QA_EFFORT`（預設 medium）調整；實測回應約 4–7 秒。
+- 每次提問寫入稽核紀錄（`knowledge.asked`：字數、篩選條件、引用的會議），不保存問題原文。
+- 主辦人新增、移除或同步與會者後，該會議的知識庫會自動重建，與會者 metadata 保持最新。
 
 ### AI 會議記錄（Phase 4）使用說明
 

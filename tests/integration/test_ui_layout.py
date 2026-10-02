@@ -120,7 +120,8 @@ def test_google_site_verification_meta_tag_only_when_configured(client, app):
 
 
 def test_header_links_are_buttons_and_mark_current_page(client, app, db):
-    """TC-44: 登入後頁首「會議」「範本」「登出」為導覽按鈕，目前所在頁面以 aria-current 標示。"""
+    """TC-44: 登入後頁首「會議」「範本」「登出」為導覽按鈕，目前所在頁面以 aria-current 標示
+    （知識庫改為右下角聊天圖示，REQ-63）。"""
     with app.app_context():
         user = User(email="nav@example.com", display_name="Nav")
         _db.session.add(user)
